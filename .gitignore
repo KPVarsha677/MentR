@@ -1,0 +1,43 @@
+# ==============================
+# Dependencies
+# ==============================
+node_modules/
+
+# ==============================
+# Build output
+# ==============================
+target/
+frontend/build/
+frontend/dist/
+
+# ==============================
+# Local secrets / environment overrides
+# ==============================
+# Real DB password + JWT secret live here for local dev only — never commit.
+backend/config/
+.env
+.env.*
+*.env
+
+# ==============================
+# Logs
+# ==============================
+*.log
+logs/
+
+# ==============================
+# IDE / editor files
+# ==============================
+.vscode/
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+
+# ==============================
+# OS-generated files
+# ==============================
+.DS_Store
+Thumbs.db
+desktop.ini

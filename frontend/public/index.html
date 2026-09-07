@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+
+    <!--
+      favicon.ico is referenced here.
+      React Scripts (CRA) serves everything in /public at the root URL.
+      %PUBLIC_URL% is replaced by CRA with the correct base path at build time.
+      In development it is just an empty string, so %PUBLIC_URL%/favicon.ico → /favicon.ico
+    -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+
+    <!-- Makes the page viewport-responsive on mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Browser tab colour on Android Chrome -->
+    <meta name="theme-color" content="#3b82d4" />
+
+    <!-- App description (shown by search engines and when saved to home screen) -->
+    <meta name="description" content="MentR - Smart Mentor-Mentee Platform" />
+
+    <!--
+      manifest.json provides metadata for "Add to Home Screen" on mobile.
+      CRA requires this file to exist even if you don't use PWA features.
+    -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <title>MentR</title>
+  </head>
+  <body>
+    <!--
+      This <noscript> tag is shown only if the user has JavaScript disabled.
+      React cannot run without JavaScript, so we tell the user what happened.
+    -->
+    <noscript>You need to enable JavaScript to run this application.</noscript>
+
+    <!--
+      This <div id="root"> is THE most important line in this file.
+      In src/index.js we write:
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+      React mounts the entire application inside this div.
+      The div starts empty — React fills it in at runtime.
+    -->
+    <div id="root"></div>
+  </body>
+</html>

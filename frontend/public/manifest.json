@@ -1,0 +1,9 @@
+{
+  "short_name": "MentR",
+  "name": "MentR - Smart Mentor-Mentee Platform",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#3b82d4",
+  "background_color": "#ffffff"
+}
