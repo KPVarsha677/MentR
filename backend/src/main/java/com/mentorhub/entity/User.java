@@ -32,6 +32,11 @@ public class User {
     @Column(nullable = false)
     private String role;
 
+    // False until the user clicks the emailed verification link. Login is
+    // blocked while this is false (see AuthService.login).
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
     // Profile picture filename stored under uploads/profile-pictures/
     private String profilePicture;
 

@@ -7,16 +7,21 @@ import api from '../services/api';
  * After successful login, redirects to the correct dashboard based on role.
  */
 function LoginPage() {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError]               = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
 
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setNeedsVerification(false);
+    setResendStatus('');
     setLoading(true);
 
     try {
@@ -36,8 +41,19 @@ function LoginPage() {
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid email or password. Please try again.');
+      setNeedsVerification(err.response?.data?.code === 'EMAIL_NOT_VERIFIED');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendStatus('sending');
+    try {
+      const response = await api.post('/api/auth/resend-verification', { email });
+      setResendStatus(response.data.message);
+    } catch (err) {
+      setResendStatus(err.response?.data?.error || 'Could not resend. Please try again.');
     }
   };
 
@@ -105,6 +121,22 @@ function LoginPage() {
             </div>
           )}
 
+          {needsVerification && (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendStatus === 'sending'}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                Resend verification email
+              </button>
+              {resendStatus && resendStatus !== 'sending' && (
+                <p className="text-sm text-slate-500 mt-2">{resendStatus}</p>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="form-label">Email Address</label>
@@ -120,14 +152,25 @@ function LoginPage() {
 
             <div>
               <label className="form-label">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
-                placeholder="Enter your password"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pr-10"
+                  placeholder="Enter your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
 
             <button

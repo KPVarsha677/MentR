@@ -6,6 +6,7 @@ import com.mentorhub.dto.RegisterRequest;
 import com.mentorhub.entity.StudentProfile;
 import com.mentorhub.entity.TeacherProfile;
 import com.mentorhub.entity.User;
+import com.mentorhub.exception.EmailNotVerifiedException;
 import com.mentorhub.repository.StudentProfileRepository;
 import com.mentorhub.repository.TeacherProfileRepository;
 import com.mentorhub.repository.UserRepository;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -54,6 +56,9 @@ public class AuthService {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private EmailVerificationService emailVerificationService;
 
     // Shared secret that must be supplied to register as ROLE_TEACHER — set
     // via the TEACHER_INVITE_CODE environment variable (or the gitignored
@@ -92,15 +97,17 @@ public class AuthService {
      *
      * STEP BY STEP:
      * 1. Check if email already exists (to prevent duplicates)
-     * 2. Create a new User entity with hashed password
+     * 2. Create a new User entity with hashed password, unverified
      * 3. Save the User to the database
      * 4. Create an empty profile (StudentProfile or TeacherProfile)
-     * 5. Generate a JWT token and return it with user info
+     * 5. Issue a verification token and email the link — no JWT is issued
+     *    here anymore; the account can't log in until that link is clicked
+     *    (see login() below)
      *
      * @param request - RegisterRequest DTO containing name, email, password, role
-     * @return AuthResponse with JWT token and user information
+     * @return a message telling the user to check their email
      */
-    public AuthResponse register(RegisterRequest request) {
+    public Map<String, String> register(RegisterRequest request) {
         // Check for duplicate email
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("An account with this email already exists");
@@ -145,9 +152,11 @@ public class AuthService {
             teacherProfileRepository.save(profile);
         }
 
-        // Generate JWT token and return response
-        String token = jwtUtil.generateToken(user.getEmail());
-        return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), user.getRole());
+        // Send the verification email — login is blocked until this link is clicked
+        emailVerificationService.issueAndSend(user);
+
+        return Map.of("message",
+                "Registration successful! Please check your email to verify your account before signing in.");
     }
 
     /**
@@ -157,7 +166,8 @@ public class AuthService {
      * 1. Use Spring Security's AuthenticationManager to verify email+password
      * 2. If credentials are wrong, it throws an exception automatically
      * 3. Load the user from the database
-     * 4. Generate a JWT token and return it
+     * 4. Reject if the account's email hasn't been verified yet
+     * 5. Generate a JWT token and return it
      *
      * @param request - LoginRequest DTO with email and password
      * @return AuthResponse with JWT token and user information
@@ -185,6 +195,14 @@ public class AuthService {
         // Load the full user entity to get the role and name
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Correct password, but the account hasn't clicked its verification
+        // link yet — this check does NOT count as a failed login attempt,
+        // since the password itself was right.
+        if (!user.isEmailVerified()) {
+            throw new EmailNotVerifiedException(
+                    "Please verify your email before logging in. Check your inbox for the verification link.");
+        }
 
         // Generate a new JWT token for this session
         String token = jwtUtil.generateToken(user.getEmail());

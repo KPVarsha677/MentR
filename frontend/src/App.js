@@ -1,9 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
+// Public Pages
+import LandingPage from './pages/LandingPage';
+
 // Auth Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 
 // Student Pages
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -20,6 +24,7 @@ import StudentMarks from './pages/student/StudentMarks';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import TeacherClassrooms from './pages/teacher/TeacherClassrooms';
 import TeacherStudentView from './pages/teacher/TeacherStudentView';
+import TeacherPendingApprovals from './pages/teacher/TeacherPendingApprovals';
 import TeacherSearch from './pages/teacher/TeacherSearch';
 import TeacherReports from './pages/teacher/TeacherReports';
 import TeacherNotifications from './pages/teacher/TeacherNotifications';
@@ -47,9 +52,10 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes - no login needed */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
 
         {/* Student Routes - protected, only ROLE_STUDENT */}
         <Route path="/student" element={<ProtectedRoute role="ROLE_STUDENT" />}>
@@ -69,6 +75,7 @@ function App() {
           <Route path="dashboard" element={<TeacherDashboard />} />
           <Route path="classrooms" element={<TeacherClassrooms />} />
           <Route path="students/:studentId" element={<TeacherStudentView />} />
+          <Route path="pending" element={<TeacherPendingApprovals />} />
           <Route path="search" element={<TeacherSearch />} />
           <Route path="reports" element={<TeacherReports />} />
           <Route path="notifications" element={<TeacherNotifications />} />

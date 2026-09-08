@@ -24,13 +24,18 @@ STEP 1: DATABASE SETUP
    mysql -u root -p mentr_db < database/schema.sql
 
 ===========================================================
-STEP 2: CONFIGURE DATABASE + JWT SECRET + TEACHER INVITE CODE (ENV VARS)
+STEP 2: CONFIGURE ENVIRONMENT VARIABLES
 ===========================================================
 
-The database password, JWT signing secret, and teacher invite code are NOT
-stored in application.properties (never commit real secrets to source
-control). They are read from the environment variables DB_PASSWORD,
-JWT_SECRET, and TEACHER_INVITE_CODE.
+The database password, JWT signing secret, teacher invite code, and email
+settings are NOT stored in application.properties (never commit real
+secrets to source control). They are read from environment variables:
+  DB_PASSWORD           - your MySQL password
+  JWT_SECRET             - any long random string (64+ characters)
+  TEACHER_INVITE_CODE     - required to register as a Teacher (see below)
+  FRONTEND_URL            - where the frontend is hosted (for email links)
+  SMTP_HOST / SMTP_PORT / SMTP_USERNAME / SMTP_PASSWORD / SMTP_FROM
+                          - for sending the verification email (see below)
 
 TEACHER_INVITE_CODE is required to register as a Teacher — without it,
 anyone could self-register as a teacher and get access to every student's
@@ -38,25 +43,43 @@ data. Pick a value and give it only to actual faculty; students never need
 it. If it's unset, teacher registration is blocked entirely (student
 registration still works normally).
 
+EMAIL VERIFICATION: every new account must click a link emailed to it
+before it can log in. SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD work
+with any standard SMTP provider — e.g. Gmail with a 16-character "app
+password" from your Google Account, or the SMTP relay of SendGrid/Mailgun/
+etc. If SMTP_HOST is left unset, no email is actually sent — the backend
+just logs the verification link at INFO level instead, so local dev and
+testing work without any email credentials configured. FRONTEND_URL is
+used to build that link (defaults to http://localhost:3000).
+
 Option A — set OS environment variables before running the backend:
   Windows (PowerShell):
     $env:DB_PASSWORD = "your_mysql_password"
     $env:JWT_SECRET   = "any-long-random-string-at-least-64-characters"
     $env:TEACHER_INVITE_CODE = "a-code-you-hand-out-to-faculty"
+    $env:SMTP_HOST = "smtp.gmail.com"
+    $env:SMTP_PORT = "587"
+    $env:SMTP_USERNAME = "yourname@gmail.com"
+    $env:SMTP_PASSWORD = "your-16-character-app-password"
   macOS/Linux:
     export DB_PASSWORD=your_mysql_password
     export JWT_SECRET=any-long-random-string-at-least-64-characters
     export TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
+    export SMTP_HOST=smtp.gmail.com
+    export SMTP_PORT=587
+    export SMTP_USERNAME=yourname@gmail.com
+    export SMTP_PASSWORD=your-16-character-app-password
 
 Option B (used for local development on this machine) — create a file
 backend/config/application.properties (this path is gitignored and will
-never be committed) containing:
+never be committed) containing the same keys, e.g.:
     DB_PASSWORD=your_mysql_password
     JWT_SECRET=any-long-random-string-at-least-64-characters
     TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
 Spring Boot automatically loads this file with higher priority than the
 classpath application.properties, so no other configuration is needed —
-just run mvn spring-boot:run from the backend folder as usual.
+just run mvn spring-boot:run from the backend folder as usual. SMTP_* can
+be omitted here for local dev — verification links just get logged instead.
 
 ===========================================================
 STEP 3: START THE BACKEND
@@ -109,7 +132,16 @@ TEST STUDENT ACCOUNT:
   Password: password123
   Role:     Student
 
-After registering both accounts:
+3. After registering, you WON'T be logged in automatically — every new
+   account must be verified first. If SMTP_HOST isn't configured, the
+   backend logs the verification link instead of emailing it: look in the
+   backend terminal for a line like
+     [EmailService] ... Link for alice@mentorhub.com: http://localhost:3000/verify-email?token=...
+   Open that link (or paste it into the browser) to verify the account,
+   then sign in normally. If SMTP_HOST IS configured, check the real inbox
+   instead. Either page also offers "Resend verification email" if needed.
+
+After registering and verifying both accounts:
   - Teacher: Go to Classrooms → Create a classroom → Note the join code
   - Student: Go to Classrooms → Enter the join code → Join
   - Student: Go to Projects → Add a project
@@ -198,8 +230,10 @@ API ENDPOINTS SUMMARY
 ===========================================================
 
 AUTH:
-  POST /api/auth/register   - Register new user
-  POST /api/auth/login      - Login and get JWT
+  POST /api/auth/register            - Register new user (unverified; emails a verification link)
+  POST /api/auth/verify-email        - Verify the token from that email; unlocks login
+  POST /api/auth/resend-verification - Resend the verification link (same response either way — never reveals if the email exists)
+  POST /api/auth/login               - Login and get JWT (blocked until verified)
 
 STUDENT (requires ROLE_STUDENT JWT):
   GET  /api/student/{id}/profile      - Get profile

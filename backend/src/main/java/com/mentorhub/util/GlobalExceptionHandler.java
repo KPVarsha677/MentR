@@ -1,5 +1,6 @@
 package com.mentorhub.util;
 
+import com.mentorhub.exception.EmailNotVerifiedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -54,6 +55,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
         Map<String, String> error = new HashMap<>();
         error.put("error", "Access denied. You do not have permission to perform this action.");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
+    /**
+     * Handle login attempts on an account whose email isn't verified yet →
+     * 403, with a machine-readable "code" the frontend uses to show a
+     * "resend verification email" action instead of a generic error.
+     */
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<Map<String, String>> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        error.put("code", "EMAIL_NOT_VERIFIED");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 

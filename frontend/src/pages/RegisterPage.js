@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 /**
  * RegisterPage - Registration for new teachers and students.
- * After registration, users are automatically logged in and redirected.
+ * The account is created unverified — registering no longer logs the user
+ * in. Instead they're shown a "check your email" screen and must click the
+ * verification link before they can sign in.
  */
 function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -14,10 +16,11 @@ function RegisterPage() {
     role: 'ROLE_STUDENT',
     teacherInviteCode: ''
   });
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const navigate = useNavigate();
+  const [error, setError]               = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [registered, setRegistered]     = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -29,24 +32,22 @@ function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/auth/register', formData);
-      const data = response.data;
-
-      localStorage.setItem('token',  data.token);
-      localStorage.setItem('userId', data.userId);
-      localStorage.setItem('name',   data.name);
-      localStorage.setItem('email',  data.email);
-      localStorage.setItem('role',   data.role);
-
-      if (data.role === 'ROLE_TEACHER') {
-        navigate('/teacher/dashboard');
-      } else {
-        navigate('/student/dashboard');
-      }
+      await api.post('/api/auth/register', formData);
+      setRegistered(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendStatus('sending');
+    try {
+      const response = await api.post('/api/auth/resend-verification', { email: formData.email });
+      setResendStatus(response.data.message);
+    } catch (err) {
+      setResendStatus(err.response?.data?.error || 'Could not resend. Please try again.');
     }
   };
 
@@ -100,6 +101,37 @@ function RegisterPage() {
             <span className="text-blue-600 font-black text-xl">MentR</span>
           </div>
 
+          {registered ? (
+            <>
+              <h1 className="text-2xl font-black text-slate-800 mb-1">Check your email 📬</h1>
+              <p className="text-slate-500 text-sm mb-6">
+                We sent a verification link to <span className="font-semibold">{formData.email}</span>.
+                Click it to activate your account, then sign in.
+              </p>
+
+              {resendStatus && (
+                <div className="alert-error mb-4" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
+                  <span>{resendStatus}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendStatus === 'sending'}
+                className="btn-primary w-full py-3 text-base mb-4"
+              >
+                Resend verification email
+              </button>
+
+              <p className="text-center text-sm text-slate-500">
+                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  Back to sign in
+                </Link>
+              </p>
+            </>
+          ) : (
+          <>
           <h1 className="text-2xl font-black text-slate-800 mb-1">Create your account</h1>
           <p className="text-slate-500 text-sm mb-8">Start managing your academic journey with MentR.</p>
 
@@ -159,15 +191,26 @@ function RegisterPage() {
 
             <div>
               <label className="form-label">Password</label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="input-field"
-                placeholder="At least 6 characters"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="input-field pr-10"
+                  placeholder="At least 6 characters"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
 
             {isTeacher && (
@@ -205,6 +248,8 @@ function RegisterPage() {
               Sign in
             </Link>
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>
