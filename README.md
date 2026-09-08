@@ -24,26 +24,36 @@ STEP 1: DATABASE SETUP
    mysql -u root -p mentr_db < database/schema.sql
 
 ===========================================================
-STEP 2: CONFIGURE DATABASE + JWT SECRET (ENVIRONMENT VARIABLES)
+STEP 2: CONFIGURE DATABASE + JWT SECRET + TEACHER INVITE CODE (ENV VARS)
 ===========================================================
 
-The database password and JWT signing secret are NOT stored in
-application.properties (never commit real secrets to source control).
-They are read from the environment variables DB_PASSWORD and JWT_SECRET.
+The database password, JWT signing secret, and teacher invite code are NOT
+stored in application.properties (never commit real secrets to source
+control). They are read from the environment variables DB_PASSWORD,
+JWT_SECRET, and TEACHER_INVITE_CODE.
+
+TEACHER_INVITE_CODE is required to register as a Teacher — without it,
+anyone could self-register as a teacher and get access to every student's
+data. Pick a value and give it only to actual faculty; students never need
+it. If it's unset, teacher registration is blocked entirely (student
+registration still works normally).
 
 Option A — set OS environment variables before running the backend:
   Windows (PowerShell):
     $env:DB_PASSWORD = "your_mysql_password"
     $env:JWT_SECRET   = "any-long-random-string-at-least-64-characters"
+    $env:TEACHER_INVITE_CODE = "a-code-you-hand-out-to-faculty"
   macOS/Linux:
     export DB_PASSWORD=your_mysql_password
     export JWT_SECRET=any-long-random-string-at-least-64-characters
+    export TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
 
 Option B (used for local development on this machine) — create a file
 backend/config/application.properties (this path is gitignored and will
 never be committed) containing:
     DB_PASSWORD=your_mysql_password
     JWT_SECRET=any-long-random-string-at-least-64-characters
+    TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
 Spring Boot automatically loads this file with higher priority than the
 classpath application.properties, so no other configuration is needed —
 just run mvn spring-boot:run from the backend folder as usual.
@@ -91,6 +101,7 @@ TEST TEACHER ACCOUNT:
   Email:    john@mentorhub.com
   Password: password123
   Role:     Teacher
+  Invite Code: whatever you set TEACHER_INVITE_CODE to (see Step 2)
 
 TEST STUDENT ACCOUNT:
   Name:     Alice Doe

@@ -11,12 +11,15 @@ import com.mentorhub.repository.TeacherProfileRepository;
 import com.mentorhub.repository.UserRepository;
 import com.mentorhub.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,6 +54,15 @@ public class AuthService {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    // Shared secret that must be supplied to register as ROLE_TEACHER — set
+    // via the TEACHER_INVITE_CODE environment variable (or the gitignored
+    // backend/config/application.properties for local dev) and handed out by
+    // the administrator to actual faculty. Without this, anyone visiting the
+    // public registration page could pick "Teacher" and get full access to
+    // every student's data and verification powers.
+    @Value("${app.teacher-invite-code:}")
+    private String teacherInviteCode;
 
     // ─────────────────────────────────────────────────────────────────────
     // Login brute-force protection.
@@ -97,6 +109,19 @@ public class AuthService {
         // Validate role
         if (!request.getRole().equals("ROLE_TEACHER") && !request.getRole().equals("ROLE_STUDENT")) {
             throw new RuntimeException("Invalid role. Must be ROLE_TEACHER or ROLE_STUDENT");
+        }
+
+        // Registering as a teacher requires the shared invite code — without
+        // this check, anyone on the public registration page could pick
+        // "Teacher" and get full access to every student's data.
+        if (request.getRole().equals("ROLE_TEACHER")) {
+            if (teacherInviteCode == null || teacherInviteCode.isBlank()) {
+                throw new RuntimeException(
+                        "Teacher registration is not configured. Contact your administrator.");
+            }
+            if (!constantTimeEquals(teacherInviteCode, request.getTeacherInviteCode())) {
+                throw new RuntimeException("Invalid teacher invite code");
+            }
         }
 
         // Create and save the User entity
@@ -186,5 +211,20 @@ public class AuthService {
                 attempts.lockedUntil = LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES);
             }
         }
+    }
+
+    /**
+     * Compares two strings without leaking timing information about where
+     * they first differ — a plain String.equals() short-circuits on the
+     * first mismatched character, which (in principle) lets an attacker
+     * guess a secret one character at a time by measuring response time.
+     */
+    private boolean constantTimeEquals(String expected, String actual) {
+        if (actual == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                actual.getBytes(StandardCharsets.UTF_8));
     }
 }
