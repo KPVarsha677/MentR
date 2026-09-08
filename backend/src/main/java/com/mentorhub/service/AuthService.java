@@ -12,9 +12,13 @@ import com.mentorhub.repository.UserRepository;
 import com.mentorhub.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * AuthService - handles user registration and login.
@@ -47,6 +51,29 @@ public class AuthService {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Login brute-force protection.
+    //
+    // WHY THIS EXISTS:
+    // Before this, there was no limit on login attempts — a script could try
+    // unlimited passwords against any email. This is an in-memory, per-email
+    // lockout: after MAX_ATTEMPTS wrong passwords in a row, that email is
+    // locked out for LOCKOUT_MINUTES before another attempt is allowed. It
+    // resets on a successful login. Being in-memory, it only protects a
+    // single backend instance (fine for this deployment) and resets on
+    // restart — acceptable for this app's scale, but not a substitute for a
+    // shared store if this is ever run behind multiple instances.
+    // ─────────────────────────────────────────────────────────────────────
+    private static final int MAX_LOGIN_ATTEMPTS = 5;
+    private static final long LOCKOUT_MINUTES = 15;
+
+    private static class LoginAttempts {
+        int failedCount;
+        LocalDateTime lockedUntil;
+    }
+
+    private final ConcurrentHashMap<String, LoginAttempts> loginAttempts = new ConcurrentHashMap<>();
 
     /**
      * Register a new user (teacher or student).
@@ -111,15 +138,25 @@ public class AuthService {
      * @return AuthResponse with JWT token and user information
      */
     public AuthResponse login(LoginRequest request) {
-        // This line does the actual authentication:
-        // - Loads the user from database (via CustomUserDetailsService)
-        // - Compares the provided password with the stored BCrypt hash
-        // - Throws BadCredentialsException if credentials are wrong
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        String email = request.getEmail().toLowerCase();
+        checkNotLockedOut(email);
 
-        // If we reach here, authentication succeeded
+        try {
+            // This line does the actual authentication:
+            // - Loads the user from database (via CustomUserDetailsService)
+            // - Compares the provided password with the stored BCrypt hash
+            // - Throws BadCredentialsException if credentials are wrong
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
+        } catch (BadCredentialsException ex) {
+            recordFailedAttempt(email);
+            throw ex;
+        }
+
+        // Authentication succeeded — clear any prior failed attempts for this email
+        loginAttempts.remove(email);
+
         // Load the full user entity to get the role and name
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -127,5 +164,27 @@ public class AuthService {
         // Generate a new JWT token for this session
         String token = jwtUtil.generateToken(user.getEmail());
         return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), user.getRole());
+    }
+
+    private void checkNotLockedOut(String email) {
+        LoginAttempts attempts = loginAttempts.get(email);
+        if (attempts != null && attempts.lockedUntil != null) {
+            if (LocalDateTime.now().isBefore(attempts.lockedUntil)) {
+                throw new RuntimeException(
+                        "Too many failed login attempts. Please try again in a few minutes.");
+            }
+            // Lockout window has passed — reset and allow a fresh attempt.
+            loginAttempts.remove(email);
+        }
+    }
+
+    private void recordFailedAttempt(String email) {
+        LoginAttempts attempts = loginAttempts.computeIfAbsent(email, k -> new LoginAttempts());
+        synchronized (attempts) {
+            attempts.failedCount++;
+            if (attempts.failedCount >= MAX_LOGIN_ATTEMPTS) {
+                attempts.lockedUntil = LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES);
+            }
+        }
     }
 }

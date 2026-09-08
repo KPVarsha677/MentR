@@ -173,10 +173,20 @@ public class ClassroomService {
     /**
      * Get all students in a specific classroom.
      * Used by teachers to see their student roster.
+     *
+     * @param teacherId the authenticated caller — must own the classroom,
+     *                  otherwise any teacher could view another teacher's
+     *                  student roster just by guessing a classroom id
      */
-    public List<ClassroomMember> getClassroomStudents(Long classroomId) {
+    public List<ClassroomMember> getClassroomStudents(Long classroomId, Long teacherId) {
         Classroom classroom = classroomRepository.findById(classroomId)
                 .orElseThrow(() -> new RuntimeException("Classroom not found"));
+
+        if (!classroom.getTeacher().getId().equals(teacherId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "You are not authorized to view this classroom's roster");
+        }
+
         return classroomMemberRepository.findByClassroom(classroom);
     }
 }

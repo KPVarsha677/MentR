@@ -91,9 +91,16 @@ public class NotificationService {
      * Mark a single notification as read.
      *
      * @param notificationId ID of the notification to mark
+     * @param teacherId      the authenticated caller — must own the notification,
+     *                       otherwise a teacher could mark (or probe the existence
+     *                       of) another teacher's notification just by guessing its id
      */
-    public void markAsRead(Long notificationId) {
+    public void markAsRead(Long notificationId, Long teacherId) {
         notificationRepository.findById(notificationId).ifPresent(n -> {
+            if (!n.getTeacher().getId().equals(teacherId)) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "You are not authorized to access this notification");
+            }
             n.setRead(true);
             notificationRepository.save(n);
         });

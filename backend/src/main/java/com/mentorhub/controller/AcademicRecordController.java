@@ -2,6 +2,7 @@ package com.mentorhub.controller;
 
 import com.mentorhub.dto.AcademicRecordRequest;
 import com.mentorhub.entity.AcademicRecord;
+import com.mentorhub.security.SecurityUtils;
 import com.mentorhub.service.AcademicRecordService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,10 @@ import java.util.Map;
 /**
  * AcademicRecordController - REST API for student academic marks management.
  *
- * All endpoints require ROLE_STUDENT.
+ * All endpoints require ROLE_STUDENT, and {userId} must match the caller's
+ * own authenticated id (SecurityUtils.requireSelf) — otherwise any student
+ * could read or edit another student's grades just by changing the id in
+ * the URL.
  * Base path: /api/student/{userId}/academic-records
  *
  * GET    /api/student/{userId}/academic-records           → all records
@@ -37,6 +41,7 @@ public class AcademicRecordController {
             @PathVariable Long userId,
             @RequestParam(required = false) Integer semester) {
 
+        SecurityUtils.requireSelf(userId);
         if (semester != null) {
             return ResponseEntity.ok(academicRecordService.getSemesterRecords(userId, semester));
         }
@@ -47,6 +52,7 @@ public class AcademicRecordController {
     public ResponseEntity<AcademicRecord> addRecord(
             @PathVariable Long userId,
             @Valid @RequestBody AcademicRecordRequest request) {
+        SecurityUtils.requireSelf(userId);
         return ResponseEntity.ok(academicRecordService.addRecord(userId, request));
     }
 
@@ -55,6 +61,7 @@ public class AcademicRecordController {
             @PathVariable Long userId,
             @PathVariable Long recordId,
             @Valid @RequestBody AcademicRecordRequest request) {
+        SecurityUtils.requireSelf(userId);
         return ResponseEntity.ok(academicRecordService.updateRecord(userId, recordId, request));
     }
 
@@ -62,6 +69,7 @@ public class AcademicRecordController {
     public ResponseEntity<Map<String, String>> deleteRecord(
             @PathVariable Long userId,
             @PathVariable Long recordId) {
+        SecurityUtils.requireSelf(userId);
         academicRecordService.deleteRecord(userId, recordId);
         return ResponseEntity.ok(Map.of("message", "Record deleted"));
     }

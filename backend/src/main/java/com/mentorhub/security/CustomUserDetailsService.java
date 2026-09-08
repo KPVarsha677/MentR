@@ -3,12 +3,10 @@ package com.mentorhub.security;
 import com.mentorhub.entity.User;
 import com.mentorhub.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import java.util.Collections;
 
 /**
  * CustomUserDetailsService - loads user details from the database for Spring Security.
@@ -44,12 +42,9 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        // Convert our User entity to a Spring Security UserDetails object
-        // SimpleGrantedAuthority wraps the role string (e.g., "ROLE_TEACHER")
-        return new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
-                user.getPassword(),
-                Collections.singletonList(new SimpleGrantedAuthority(user.getRole()))
-        );
+        // Wrap our User entity in a UserDetails that also carries the numeric
+        // user ID, so controllers can verify the authenticated identity
+        // instead of trusting a client-supplied id (see SecurityUtils).
+        return new CustomUserDetails(user);
     }
 }

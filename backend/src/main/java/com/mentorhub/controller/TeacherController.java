@@ -3,6 +3,7 @@ package com.mentorhub.controller;
 import com.mentorhub.dto.TeacherProfileRequest;
 import com.mentorhub.dto.VerificationRequest;
 import com.mentorhub.entity.*;
+import com.mentorhub.security.SecurityUtils;
 import com.mentorhub.service.NotificationService;
 import com.mentorhub.service.TeacherService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,15 @@ import java.util.Map;
 /**
  * TeacherController - REST API for teacher dashboard operations.
  * Includes notification endpoints restored after demo phase.
+ *
+ * {teacherId} path/query values that denote "the acting teacher" (profile,
+ * dashboard, verification, notifications) are checked against the caller's
+ * own authenticated id via SecurityUtils.requireSelf — otherwise any teacher
+ * could act as another teacher (e.g. read their notifications, or stamp a
+ * verification as done by someone else) just by changing an id. Endpoints
+ * that view a STUDENT's data (search, /students/{studentId}/...) are
+ * intentionally open to any teacher — that is existing, unrestricted
+ * department-wide behavior, not something this pass changes.
  */
 @RestController
 @RequestMapping("/api/teacher")
@@ -31,12 +41,14 @@ public class TeacherController {
 
     @GetMapping("/{teacherId}/profile")
     public ResponseEntity<TeacherProfile> getProfile(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.getProfile(teacherId));
     }
 
     @PutMapping("/{teacherId}/profile")
     public ResponseEntity<TeacherProfile> updateProfile(@PathVariable Long teacherId,
                                                          @RequestBody TeacherProfileRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.updateProfile(teacherId, request));
     }
 
@@ -44,6 +56,7 @@ public class TeacherController {
 
     @GetMapping("/{teacherId}/dashboard")
     public ResponseEntity<Map<String, Long>> getDashboardStats(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.getDashboardStats(teacherId));
     }
 
@@ -107,6 +120,7 @@ public class TeacherController {
     public ResponseEntity<Project> verifyProject(@PathVariable Long projectId,
                                                    @RequestParam Long teacherId,
                                                    @RequestBody VerificationRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.verifyProject(projectId, teacherId, request));
     }
 
@@ -114,6 +128,7 @@ public class TeacherController {
     public ResponseEntity<Certification> verifyCertification(@PathVariable Long certId,
                                                                @RequestParam Long teacherId,
                                                                @RequestBody VerificationRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.verifyCertification(certId, teacherId, request));
     }
 
@@ -121,6 +136,7 @@ public class TeacherController {
     public ResponseEntity<Internship> verifyInternship(@PathVariable Long internshipId,
                                                         @RequestParam Long teacherId,
                                                         @RequestBody VerificationRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.verifyInternship(internshipId, teacherId, request));
     }
 
@@ -128,6 +144,7 @@ public class TeacherController {
     public ResponseEntity<Achievement> verifyAchievement(@PathVariable Long achievementId,
                                                           @RequestParam Long teacherId,
                                                           @RequestBody VerificationRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.verifyAchievement(achievementId, teacherId, request));
     }
 
@@ -135,6 +152,7 @@ public class TeacherController {
     public ResponseEntity<Skill> verifySkill(@PathVariable Long skillId,
                                               @RequestParam Long teacherId,
                                               @RequestBody VerificationRequest request) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(teacherService.verifySkill(skillId, teacherId, request));
     }
 
@@ -146,6 +164,7 @@ public class TeacherController {
      */
     @GetMapping("/{teacherId}/notifications")
     public ResponseEntity<List<Notification>> getNotifications(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(notificationService.getTeacherNotifications(teacherId));
     }
 
@@ -155,6 +174,7 @@ public class TeacherController {
      */
     @GetMapping("/{teacherId}/notifications/count")
     public ResponseEntity<Map<String, Long>> getUnreadCount(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
         return ResponseEntity.ok(Map.of("unread", notificationService.getUnreadCount(teacherId)));
     }
 
@@ -165,7 +185,8 @@ public class TeacherController {
     @PutMapping("/{teacherId}/notifications/{notificationId}/read")
     public ResponseEntity<Map<String, String>> markOneRead(@PathVariable Long teacherId,
                                                             @PathVariable Long notificationId) {
-        notificationService.markAsRead(notificationId);
+        SecurityUtils.requireSelf(teacherId);
+        notificationService.markAsRead(notificationId, teacherId);
         return ResponseEntity.ok(Map.of("message", "Marked as read"));
     }
 
@@ -175,6 +196,7 @@ public class TeacherController {
      */
     @PutMapping("/{teacherId}/notifications/read")
     public ResponseEntity<Map<String, String>> markAllRead(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
         notificationService.markAllAsRead(teacherId);
         return ResponseEntity.ok(Map.of("message", "All notifications marked as read"));
     }
@@ -186,6 +208,7 @@ public class TeacherController {
     @PostMapping("/{teacherId}/notifications/send")
     public ResponseEntity<Notification> sendNotification(@PathVariable Long teacherId,
                                                           @RequestBody Map<String, Object> body) {
+        SecurityUtils.requireSelf(teacherId);
         Long studentId = Long.valueOf(body.get("studentId").toString());
         String message  = body.getOrDefault("message",  "").toString();
         String itemType = body.getOrDefault("itemType", "GENERAL").toString();
