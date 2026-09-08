@@ -38,10 +38,4 @@ public class RegisterRequest {
     // Role must be either "ROLE_TEACHER" or "ROLE_STUDENT"
     @NotBlank(message = "Role is required")
     private String role;
-
-    // Required only when role = ROLE_TEACHER — checked against
-    // app.teacher-invite-code in AuthService.register(). Without this,
-    // anyone could self-register as a teacher and get full access to every
-    // student's data and verification powers.
-    private String teacherInviteCode;
 }

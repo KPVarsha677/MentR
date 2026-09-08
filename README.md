@@ -27,21 +27,29 @@ STEP 1: DATABASE SETUP
 STEP 2: CONFIGURE ENVIRONMENT VARIABLES
 ===========================================================
 
-The database password, JWT signing secret, teacher invite code, and email
-settings are NOT stored in application.properties (never commit real
+The database password, JWT signing secret, approved faculty email list, and
+email settings are NOT stored in application.properties (never commit real
 secrets to source control). They are read from environment variables:
-  DB_PASSWORD           - your MySQL password
-  JWT_SECRET             - any long random string (64+ characters)
-  TEACHER_INVITE_CODE     - required to register as a Teacher (see below)
-  FRONTEND_URL            - where the frontend is hosted (for email links)
+  DB_PASSWORD              - your MySQL password
+  JWT_SECRET                - any long random string (64+ characters)
+  APPROVED_TEACHER_EMAILS    - comma-separated faculty emails allowed to register as Teacher (see below)
+  FRONTEND_URL               - where the frontend is hosted (for email links)
   SMTP_HOST / SMTP_PORT / SMTP_USERNAME / SMTP_PASSWORD / SMTP_FROM
-                          - for sending the verification email (see below)
+                             - for sending the verification email (see below)
 
-TEACHER_INVITE_CODE is required to register as a Teacher — without it,
+APPROVED_TEACHER_EMAILS gates who can register as a Teacher — without it,
 anyone could self-register as a teacher and get access to every student's
-data. Pick a value and give it only to actual faculty; students never need
-it. If it's unset, teacher registration is blocked entirely (student
-registration still works normally).
+data. It's a comma-separated list with no limit on how many addresses it
+can hold, e.g.:
+    APPROVED_TEACHER_EMAILS=teacher1@college.ac.in,teacher2@college.ac.in,teacher3@college.ac.in
+Matching against this list is case-insensitive and ignores stray
+whitespace around each address. Only put real faculty emails on it —
+students never need to be on it. To add or remove a teacher later, just
+edit this one value (no code change, no rebuild) and restart the backend.
+If it's left empty, teacher registration is blocked entirely (student
+registration still works normally). A registering teacher's email must
+match one of these addresses exactly (case-insensitive) — there is no
+invite code anymore.
 
 EMAIL VERIFICATION: every new account must click a link emailed to it
 before it can log in. SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD work
@@ -56,7 +64,7 @@ Option A — set OS environment variables before running the backend:
   Windows (PowerShell):
     $env:DB_PASSWORD = "your_mysql_password"
     $env:JWT_SECRET   = "any-long-random-string-at-least-64-characters"
-    $env:TEACHER_INVITE_CODE = "a-code-you-hand-out-to-faculty"
+    $env:APPROVED_TEACHER_EMAILS = "teacher1@college.ac.in,teacher2@college.ac.in"
     $env:SMTP_HOST = "smtp.gmail.com"
     $env:SMTP_PORT = "587"
     $env:SMTP_USERNAME = "yourname@gmail.com"
@@ -64,7 +72,7 @@ Option A — set OS environment variables before running the backend:
   macOS/Linux:
     export DB_PASSWORD=your_mysql_password
     export JWT_SECRET=any-long-random-string-at-least-64-characters
-    export TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
+    export APPROVED_TEACHER_EMAILS=teacher1@college.ac.in,teacher2@college.ac.in
     export SMTP_HOST=smtp.gmail.com
     export SMTP_PORT=587
     export SMTP_USERNAME=yourname@gmail.com
@@ -75,7 +83,7 @@ backend/config/application.properties (this path is gitignored and will
 never be committed) containing the same keys, e.g.:
     DB_PASSWORD=your_mysql_password
     JWT_SECRET=any-long-random-string-at-least-64-characters
-    TEACHER_INVITE_CODE=a-code-you-hand-out-to-faculty
+    APPROVED_TEACHER_EMAILS=teacher1@college.ac.in,teacher2@college.ac.in
 Spring Boot automatically loads this file with higher priority than the
 classpath application.properties, so no other configuration is needed —
 just run mvn spring-boot:run from the backend folder as usual. SMTP_* can
@@ -124,7 +132,7 @@ TEST TEACHER ACCOUNT:
   Email:    john@mentorhub.com
   Password: password123
   Role:     Teacher
-  Invite Code: whatever you set TEACHER_INVITE_CODE to (see Step 2)
+  (Email must be listed in APPROVED_TEACHER_EMAILS — see Step 2)
 
 TEST STUDENT ACCOUNT:
   Name:     Alice Doe

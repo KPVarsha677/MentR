@@ -19,10 +19,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -60,14 +62,34 @@ public class AuthService {
     @Autowired
     private EmailVerificationService emailVerificationService;
 
-    // Shared secret that must be supplied to register as ROLE_TEACHER — set
-    // via the TEACHER_INVITE_CODE environment variable (or the gitignored
-    // backend/config/application.properties for local dev) and handed out by
-    // the administrator to actual faculty. Without this, anyone visiting the
-    // public registration page could pick "Teacher" and get full access to
-    // every student's data and verification powers.
-    @Value("${app.teacher-invite-code:}")
-    private String teacherInviteCode;
+    // Comma-separated allowlist of faculty email addresses permitted to
+    // register as ROLE_TEACHER — set via the APPROVED_TEACHER_EMAILS
+    // environment variable (or the gitignored backend/config/application.properties
+    // for local dev). Without this, anyone visiting the public registration
+    // page could pick "Teacher" and get full access to every student's data
+    // and verification powers. The department adds/removes faculty by
+    // editing this one comma-separated value — no code change needed.
+    @Value("${app.approved-teacher-emails:}")
+    private String approvedTeacherEmailsRaw;
+
+    // Parsed once at startup into a lowercased, trimmed set for O(1),
+    // case-insensitive lookups — supports any number of addresses.
+    private Set<String> approvedTeacherEmails = Collections.emptySet();
+
+    @PostConstruct
+    private void parseApprovedTeacherEmails() {
+        if (approvedTeacherEmailsRaw == null || approvedTeacherEmailsRaw.isBlank()) {
+            approvedTeacherEmails = Collections.emptySet();
+            return;
+        }
+        approvedTeacherEmails = new HashSet<>();
+        for (String email : approvedTeacherEmailsRaw.split(",")) {
+            String normalized = email.trim().toLowerCase();
+            if (!normalized.isEmpty()) {
+                approvedTeacherEmails.add(normalized);
+            }
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // Login brute-force protection.
@@ -118,16 +140,19 @@ public class AuthService {
             throw new RuntimeException("Invalid role. Must be ROLE_TEACHER or ROLE_STUDENT");
         }
 
-        // Registering as a teacher requires the shared invite code — without
-        // this check, anyone on the public registration page could pick
-        // "Teacher" and get full access to every student's data.
+        // Registering as a teacher requires the email to be on the approved
+        // faculty allowlist — without this check, anyone on the public
+        // registration page could pick "Teacher" and get full access to
+        // every student's data.
         if (request.getRole().equals("ROLE_TEACHER")) {
-            if (teacherInviteCode == null || teacherInviteCode.isBlank()) {
+            if (approvedTeacherEmails.isEmpty()) {
                 throw new RuntimeException(
                         "Teacher registration is not configured. Contact your administrator.");
             }
-            if (!constantTimeEquals(teacherInviteCode, request.getTeacherInviteCode())) {
-                throw new RuntimeException("Invalid teacher invite code");
+            String normalizedEmail = request.getEmail().trim().toLowerCase();
+            if (!approvedTeacherEmails.contains(normalizedEmail)) {
+                throw new RuntimeException(
+                        "This email is not on the approved faculty list. Contact your administrator.");
             }
         }
 
@@ -231,18 +256,4 @@ public class AuthService {
         }
     }
 
-    /**
-     * Compares two strings without leaking timing information about where
-     * they first differ — a plain String.equals() short-circuits on the
-     * first mismatched character, which (in principle) lets an attacker
-     * guess a secret one character at a time by measuring response time.
-     */
-    private boolean constantTimeEquals(String expected, String actual) {
-        if (actual == null) {
-            return false;
-        }
-        return MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.UTF_8),
-                actual.getBytes(StandardCharsets.UTF_8));
-    }
 }

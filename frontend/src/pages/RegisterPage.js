@@ -13,8 +13,7 @@ function RegisterPage() {
     name: '',
     email: '',
     password: '',
-    role: 'ROLE_STUDENT',
-    teacherInviteCode: ''
+    role: 'ROLE_STUDENT'
   });
   const [error, setError]               = useState('');
   const [loading, setLoading]           = useState(false);
@@ -212,21 +211,6 @@ function RegisterPage() {
                 </button>
               </div>
             </div>
-
-            {isTeacher && (
-              <div>
-                <label className="form-label">Teacher Invite Code</label>
-                <input
-                  type="text"
-                  name="teacherInviteCode"
-                  value={formData.teacherInviteCode}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="Provided by your administrator"
-                  required
-                />
-              </div>
-            )}
 
             <button
               type="submit"

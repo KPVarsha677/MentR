@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,7 +52,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "jwtUtil", jwtUtil);
         ReflectionTestUtils.setField(authService, "authenticationManager", authenticationManager);
         ReflectionTestUtils.setField(authService, "emailVerificationService", emailVerificationService);
-        ReflectionTestUtils.setField(authService, "teacherInviteCode", "correct-invite-code");
+        ReflectionTestUtils.setField(authService, "approvedTeacherEmails", Set.of("teacher@college.ac.in"));
     }
 
     private RegisterRequest studentRequest() {
@@ -92,34 +93,22 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_teacherWithoutInviteCode_isRejected() {
-        ReflectionTestUtils.setField(authService, "teacherInviteCode", "correct-invite-code");
+    void register_teacherEmailNotOnApprovedList_isRejected() {
         RegisterRequest req = studentRequest();
+        req.setEmail("stranger@test.com");
         req.setRole("ROLE_TEACHER");
-        req.setTeacherInviteCode(null);
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req));
-        assertTrue(ex.getMessage().toLowerCase().contains("invite code"));
+        assertTrue(ex.getMessage().toLowerCase().contains("approved faculty list"));
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void register_teacherWithWrongInviteCode_isRejected() {
+    void register_teacherEmailOnApprovedList_succeeds() {
         RegisterRequest req = studentRequest();
+        req.setEmail("teacher@college.ac.in");
         req.setRole("ROLE_TEACHER");
-        req.setTeacherInviteCode("wrong-code");
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-
-        assertThrows(RuntimeException.class, () -> authService.register(req));
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void register_teacherWithCorrectInviteCode_succeeds() {
-        RegisterRequest req = studentRequest();
-        req.setRole("ROLE_TEACHER");
-        req.setTeacherInviteCode("correct-invite-code");
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
@@ -131,15 +120,54 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_teacherRegistrationNotConfigured_isRejected() {
-        ReflectionTestUtils.setField(authService, "teacherInviteCode", "");
+    void register_teacherEmailMatching_isCaseInsensitiveAndTrimsWhitespace() {
         RegisterRequest req = studentRequest();
+        // Approved list holds "teacher@college.ac.in" (see setUp) — this
+        // should still match despite different case and stray whitespace.
+        req.setEmail("  TEACHER@College.AC.in  ");
         req.setRole("ROLE_TEACHER");
-        req.setTeacherInviteCode("anything");
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        authService.register(req);
+
+        verify(userRepository).save(any(User.class));
+        verify(emailVerificationService).issueAndSend(any(User.class));
+    }
+
+    @Test
+    void register_teacherRegistrationNotConfigured_isRejectedWhenApprovedListIsEmpty() {
+        ReflectionTestUtils.setField(authService, "approvedTeacherEmails", Set.<String>of());
+        RegisterRequest req = studentRequest();
+        req.setEmail("teacher@college.ac.in");
+        req.setRole("ROLE_TEACHER");
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
 
-        assertThrows(RuntimeException.class, () -> authService.register(req));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req));
+        assertTrue(ex.getMessage().toLowerCase().contains("not configured"));
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void parseApprovedTeacherEmails_lowercasesTrimsAndIgnoresBlankEntries() {
+        ReflectionTestUtils.setField(authService, "approvedTeacherEmailsRaw",
+                "  Teacher1@College.AC.IN , teacher2@college.ac.in ,, ");
+
+        ReflectionTestUtils.invokeMethod(authService, "parseApprovedTeacherEmails");
+
+        Object parsed = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
+        assertEquals(Set.of("teacher1@college.ac.in", "teacher2@college.ac.in"), parsed);
+    }
+
+    @Test
+    void parseApprovedTeacherEmails_supportsAnyNumberOfAddresses() {
+        String manyEmails = "t1@college.ac.in,t2@college.ac.in,t3@college.ac.in,t4@college.ac.in,t5@college.ac.in";
+        ReflectionTestUtils.setField(authService, "approvedTeacherEmailsRaw", manyEmails);
+
+        ReflectionTestUtils.invokeMethod(authService, "parseApprovedTeacherEmails");
+
+        Object parsed = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
+        assertEquals(5, ((Set<?>) parsed).size());
     }
 
     // ── login ────────────────────────────────────────────────────────────
