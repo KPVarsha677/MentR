@@ -14,6 +14,9 @@ public class AchievementRequest {
 
     private String category;
     private String description;
+
+    @NotBlank(message = "Achievement date is required")
     private String achievementDate;
+
     private String issuingOrganization;
 }

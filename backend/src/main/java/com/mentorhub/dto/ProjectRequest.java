@@ -15,6 +15,10 @@ public class ProjectRequest {
     private String description;
     private String techStack;
     private String projectUrl;
+
+    @NotBlank(message = "Start date is required")
     private String startDate;
+
+    @NotBlank(message = "End date is required")
     private String endDate;
 }

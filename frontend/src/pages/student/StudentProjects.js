@@ -129,12 +129,12 @@ function StudentProjects() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Start Date</label>
-                <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="input-field" />
+                <label className="block text-sm font-medium text-gray-600 mb-1">Start Date *</label>
+                <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="input-field" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">End Date</label>
-                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="input-field" />
+                <label className="block text-sm font-medium text-gray-600 mb-1">End Date *</label>
+                <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="input-field" required />
               </div>
             </div>
             <div className="flex gap-3">

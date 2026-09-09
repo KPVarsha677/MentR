@@ -93,12 +93,12 @@ function StudentCertifications() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
-                <input type="date" name="issueDate" value={formData.issueDate} onChange={handleChange} className="input-field" />
+                <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date *</label>
+                <input type="date" name="issueDate" value={formData.issueDate} onChange={handleChange} className="input-field" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Expiration Date</label>
-                <input type="date" name="expirationDate" value={formData.expirationDate} onChange={handleChange} className="input-field" />
+                <label className="block text-sm font-medium text-gray-600 mb-1">Expiration Date *</label>
+                <input type="date" name="expirationDate" value={formData.expirationDate} onChange={handleChange} className="input-field" required />
               </div>
             </div>
             <div>

@@ -85,16 +85,16 @@ function StudentProfile() {
           <h3 className="text-base font-semibold text-gray-700 mb-4">🎓 Academic Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Register Number</label>
-              <input name="registerNumber" value={profile.registerNumber} onChange={handleChange} className="input-field" placeholder="e.g., 21CS001" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Register Number *</label>
+              <input name="registerNumber" value={profile.registerNumber} onChange={handleChange} className="input-field" placeholder="e.g., 21CS001" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Department</label>
-              <input name="department" value={profile.department} onChange={handleChange} className="input-field" placeholder="e.g., Computer Science" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Department *</label>
+              <input name="department" value={profile.department} onChange={handleChange} className="input-field" placeholder="e.g., Computer Science" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Year</label>
-              <select name="year" value={profile.year} onChange={handleChange} className="input-field">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Year *</label>
+              <select name="year" value={profile.year} onChange={handleChange} className="input-field" required>
                 <option value="">Select Year</option>
                 <option value="1">1st Year</option>
                 <option value="2">2nd Year</option>
@@ -103,12 +103,12 @@ function StudentProfile() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Section</label>
-              <input name="section" value={profile.section} onChange={handleChange} className="input-field" placeholder="e.g., A" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Section *</label>
+              <input name="section" value={profile.section} onChange={handleChange} className="input-field" placeholder="e.g., A" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Batch</label>
-              <input name="batch" value={profile.batch} onChange={handleChange} className="input-field" placeholder="e.g., 2021-2025" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Batch *</label>
+              <input name="batch" value={profile.batch} onChange={handleChange} className="input-field" placeholder="e.g., 2021-2025" required />
             </div>
           </div>
         </div>
@@ -118,20 +118,20 @@ function StudentProfile() {
           <h3 className="text-base font-semibold text-gray-700 mb-4">👤 Personal Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
-              <input name="phone" value={profile.phone} onChange={handleChange} className="input-field" placeholder="e.g., 9876543210" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Phone *</label>
+              <input name="phone" value={profile.phone} onChange={handleChange} className="input-field" placeholder="e.g., 9876543210" required />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-600 mb-1">Address</label>
-              <input name="address" value={profile.address} onChange={handleChange} className="input-field" placeholder="Your address" />
+              <label className="block text-sm font-medium text-gray-600 mb-1">Address *</label>
+              <input name="address" value={profile.address} onChange={handleChange} className="input-field" placeholder="Your address" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">LinkedIn URL</label>
-              <input name="linkedinUrl" value={profile.linkedinUrl} onChange={handleChange} className="input-field" placeholder="https://linkedin.com/in/..." />
+              <label className="block text-sm font-medium text-gray-600 mb-1">LinkedIn URL *</label>
+              <input name="linkedinUrl" value={profile.linkedinUrl} onChange={handleChange} className="input-field" placeholder="https://linkedin.com/in/..." required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">GitHub URL</label>
-              <input name="githubUrl" value={profile.githubUrl} onChange={handleChange} className="input-field" placeholder="https://github.com/..." />
+              <label className="block text-sm font-medium text-gray-600 mb-1">GitHub URL *</label>
+              <input name="githubUrl" value={profile.githubUrl} onChange={handleChange} className="input-field" placeholder="https://github.com/..." required />
             </div>
           </div>
         </div>

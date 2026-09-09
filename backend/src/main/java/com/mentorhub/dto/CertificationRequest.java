@@ -13,8 +13,13 @@ public class CertificationRequest {
     private String name;
 
     private String issuingOrganization;
+
+    @NotBlank(message = "Issue date is required")
     private String issueDate;
+
+    @NotBlank(message = "Expiration date is required")
     private String expirationDate;
+
     private String credentialUrl;
     private String credentialId;
 }
