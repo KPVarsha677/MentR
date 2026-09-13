@@ -20,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -66,13 +67,15 @@ class AuthServiceTest {
 
     // ── register ─────────────────────────────────────────────────────────
 
+    private static final String TEST_IP = "127.0.0.1";
+
     @Test
     void register_newStudent_createsUnverifiedUserAndSendsVerificationEmail_noTokenReturned() {
         RegisterRequest req = studentRequest();
         when(userRepository.existsByEmail("alice@test.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
 
-        Map<String, String> response = authService.register(req);
+        Map<String, String> response = authService.register(req, TEST_IP);
 
         verify(userRepository).save(argThat(u -> u.getEmail().equals("alice@test.com")
                 && u.getPassword().equals("hashed")
@@ -88,7 +91,7 @@ class AuthServiceTest {
         RegisterRequest req = studentRequest();
         when(userRepository.existsByEmail("alice@test.com")).thenReturn(true);
 
-        assertThrows(RuntimeException.class, () -> authService.register(req));
+        assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
         verify(emailVerificationService, never()).issueAndSend(any());
     }
 
@@ -99,7 +102,7 @@ class AuthServiceTest {
         req.setRole("ROLE_TEACHER");
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
         assertTrue(ex.getMessage().toLowerCase().contains("approved faculty list"));
         verify(userRepository, never()).save(any());
     }
@@ -112,7 +115,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
-        authService.register(req);
+        authService.register(req, TEST_IP);
 
         verify(userRepository).save(any(User.class));
         verify(teacherProfileRepository).save(any());
@@ -129,7 +132,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
-        authService.register(req);
+        authService.register(req, TEST_IP);
 
         verify(userRepository).save(any(User.class));
         verify(emailVerificationService).issueAndSend(any(User.class));
@@ -143,7 +146,7 @@ class AuthServiceTest {
         req.setRole("ROLE_TEACHER");
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
         assertTrue(ex.getMessage().toLowerCase().contains("not configured"));
         verify(userRepository, never()).save(any());
     }
@@ -168,6 +171,90 @@ class AuthServiceTest {
 
         Object parsed = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
         assertEquals(5, ((Set<?>) parsed).size());
+    }
+
+    // ── register: rate limiting ──────────────────────────────────────────
+
+    @Test
+    void register_tenAttemptsFromSameIpSucceed_eleventhIsRateLimited() {
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        for (int i = 0; i < 10; i++) {
+            RegisterRequest req = studentRequest();
+            req.setEmail("student" + i + "@test.com");
+            authService.register(req, "1.2.3.4");
+        }
+        verify(userRepository, times(10)).save(any(User.class));
+
+        RegisterRequest eleventh = studentRequest();
+        eleventh.setEmail("student10@test.com");
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> authService.register(eleventh, "1.2.3.4"));
+        assertTrue(ex.getMessage().toLowerCase().contains("too many"));
+        // The blocked 11th attempt must never reach the database.
+        verify(userRepository, times(10)).save(any(User.class));
+    }
+
+    @Test
+    void register_rateLimitIsPerIp_differentIpIsUnaffected() {
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        for (int i = 0; i < 10; i++) {
+            RegisterRequest req = studentRequest();
+            req.setEmail("busy" + i + "@test.com");
+            authService.register(req, "5.5.5.5");
+        }
+        assertThrows(RuntimeException.class,
+                () -> authService.register(studentRequest(), "5.5.5.5"));
+
+        // A different IP has made no attempts yet and must not be blocked
+        // just because "5.5.5.5" hit its limit.
+        RegisterRequest fromOtherIp = studentRequest();
+        fromOtherIp.setEmail("other@test.com");
+        authService.register(fromOtherIp, "9.9.9.9");
+        verify(userRepository).save(argThat(u -> u.getEmail().equals("other@test.com")));
+    }
+
+    @Test
+    void register_rateLimitWindowExpires_resetsCount() {
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        for (int i = 0; i < 10; i++) {
+            RegisterRequest req = studentRequest();
+            req.setEmail("win" + i + "@test.com");
+            authService.register(req, "8.8.8.8");
+        }
+        assertThrows(RuntimeException.class,
+                () -> authService.register(studentRequest(), "8.8.8.8"));
+
+        // Simulate the 60-minute window having elapsed for this IP by
+        // reaching into the private per-IP bucket and backdating it.
+        Map<?, ?> buckets = (Map<?, ?>) ReflectionTestUtils.getField(authService, "registrationAttempts");
+        Object bucket = buckets.get("8.8.8.8");
+        ReflectionTestUtils.setField(bucket, "windowStart", LocalDateTime.now().minusMinutes(61));
+
+        RegisterRequest afterExpiry = studentRequest();
+        afterExpiry.setEmail("afterExpiry@test.com");
+        authService.register(afterExpiry, "8.8.8.8");
+        verify(userRepository).save(argThat(u -> u.getEmail().equals("afterExpiry@test.com")));
+    }
+
+    @Test
+    void register_unresolvableClientIp_isNotRateLimited() {
+        // A null clientIp (e.g. IP genuinely couldn't be resolved) fails
+        // open rather than sharing one bucket across every such caller.
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        for (int i = 0; i < 15; i++) {
+            RegisterRequest req = studentRequest();
+            req.setEmail("noip" + i + "@test.com");
+            authService.register(req, null);
+        }
+        verify(userRepository, times(15)).save(any(User.class));
     }
 
     // ── login ────────────────────────────────────────────────────────────

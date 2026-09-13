@@ -5,8 +5,10 @@ import com.mentorhub.dto.LoginRequest;
 import com.mentorhub.dto.RegisterRequest;
 import com.mentorhub.dto.ResendVerificationRequest;
 import com.mentorhub.dto.VerifyEmailRequest;
+import com.mentorhub.security.ClientIpResolver;
 import com.mentorhub.service.AuthService;
 import com.mentorhub.service.EmailVerificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -59,8 +61,10 @@ public class AuthController {
      * @return a message telling the user to check their email
      */
     @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authService.register(request));
+    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request,
+                                                          HttpServletRequest httpRequest) {
+        String clientIp = ClientIpResolver.resolve(httpRequest.getHeader("X-Forwarded-For"), httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(authService.register(request, clientIp));
     }
 
     /**

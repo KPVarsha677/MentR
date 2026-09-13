@@ -114,22 +114,54 @@ public class AuthService {
 
     private final ConcurrentHashMap<String, LoginAttempts> loginAttempts = new ConcurrentHashMap<>();
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Registration abuse protection.
+    //
+    // WHY THIS EXISTS:
+    // Before this, POST /register had no limit at all — a script could mass-
+    // create accounts from one IP, each one triggering a real verification
+    // email send (burning SMTP quota/reputation) and filling the DB with
+    // junk unverified users. This is an in-memory, per-IP fixed-window
+    // counter: once an IP makes MAX_REGISTRATIONS_PER_IP attempts within
+    // REGISTRATION_WINDOW_MINUTES, further attempts are rejected until the
+    // window (measured from that IP's first attempt in the window) elapses,
+    // at which point the count resets. Same in-memory/single-instance
+    // caveat as the login lockout above.
+    // ─────────────────────────────────────────────────────────────────────
+    private static final int MAX_REGISTRATIONS_PER_IP = 10;
+    private static final long REGISTRATION_WINDOW_MINUTES = 60;
+
+    private static class RegistrationAttempts {
+        int count;
+        LocalDateTime windowStart;
+    }
+
+    private final ConcurrentHashMap<String, RegistrationAttempts> registrationAttempts = new ConcurrentHashMap<>();
+
     /**
      * Register a new user (teacher or student).
      *
      * STEP BY STEP:
-     * 1. Check if email already exists (to prevent duplicates)
-     * 2. Create a new User entity with hashed password, unverified
-     * 3. Save the User to the database
-     * 4. Create an empty profile (StudentProfile or TeacherProfile)
-     * 5. Issue a verification token and email the link — no JWT is issued
+     * 1. Enforce the per-IP registration rate limit
+     * 2. Check if email already exists (to prevent duplicates)
+     * 3. Create a new User entity with hashed password, unverified
+     * 4. Save the User to the database
+     * 5. Create an empty profile (StudentProfile or TeacherProfile)
+     * 6. Issue a verification token and email the link — no JWT is issued
      *    here anymore; the account can't log in until that link is clicked
      *    (see login() below)
      *
-     * @param request - RegisterRequest DTO containing name, email, password, role
+     * @param request  - RegisterRequest DTO containing name, email, password, role
+     * @param clientIp - the caller's real IP (see ClientIpResolver), used only
+     *                   for rate limiting; may be null if truly unknown, in
+     *                   which case this call is not rate limited (fail open
+     *                   rather than lock every unresolvable-IP caller
+     *                   together under one shared bucket)
      * @return a message telling the user to check their email
      */
-    public Map<String, String> register(RegisterRequest request) {
+    public Map<String, String> register(RegisterRequest request, String clientIp) {
+        enforceRegistrationRateLimit(clientIp);
+
         // Check for duplicate email
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("An account with this email already exists");
@@ -253,6 +285,35 @@ public class AuthService {
             if (attempts.failedCount >= MAX_LOGIN_ATTEMPTS) {
                 attempts.lockedUntil = LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES);
             }
+        }
+    }
+
+    /**
+     * Reject registration once an IP has made MAX_REGISTRATIONS_PER_IP
+     * attempts within the current REGISTRATION_WINDOW_MINUTES window;
+     * otherwise record this attempt. The window is fixed, not sliding: it
+     * starts on that IP's first attempt and resets entirely once it elapses.
+     */
+    private void enforceRegistrationRateLimit(String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) {
+            // No identifiable client IP — fail open rather than share one
+            // bucket across every caller we can't distinguish.
+            return;
+        }
+        RegistrationAttempts attempts = registrationAttempts.computeIfAbsent(clientIp, k -> new RegistrationAttempts());
+        synchronized (attempts) {
+            LocalDateTime now = LocalDateTime.now();
+            boolean windowExpired = attempts.windowStart == null
+                    || now.isAfter(attempts.windowStart.plusMinutes(REGISTRATION_WINDOW_MINUTES));
+            if (windowExpired) {
+                attempts.windowStart = now;
+                attempts.count = 0;
+            }
+            if (attempts.count >= MAX_REGISTRATIONS_PER_IP) {
+                throw new RuntimeException(
+                        "Too many registration attempts from this network. Please try again later.");
+            }
+            attempts.count++;
         }
     }
 
