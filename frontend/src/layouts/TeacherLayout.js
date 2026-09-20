@@ -17,6 +17,7 @@ function TeacherLayout({ children, title }) {
   const navLinks = [
     { path: '/teacher/dashboard',     label: 'Dashboard',       icon: '🏠' },
     { path: '/teacher/classrooms',    label: 'Classrooms',      icon: '📚' },
+    { path: '/teacher/pending',       label: 'Pending Approvals', icon: '✅' },
     { path: '/teacher/search',        label: 'Search Students', icon: '🔍' },
     { path: '/teacher/reports',       label: 'Reports',         icon: '📊' },
     { path: '/teacher/notifications', label: 'Notifications',   icon: '🔔' },

@@ -6,7 +6,6 @@ import com.mentorhub.dto.RegisterRequest;
 import com.mentorhub.entity.StudentProfile;
 import com.mentorhub.entity.TeacherProfile;
 import com.mentorhub.entity.User;
-import com.mentorhub.exception.EmailNotVerifiedException;
 import com.mentorhub.repository.StudentProfileRepository;
 import com.mentorhub.repository.TeacherProfileRepository;
 import com.mentorhub.repository.UserRepository;
@@ -59,9 +58,6 @@ public class AuthService {
     @Autowired
     private AuthenticationManager authenticationManager;
 
-    @Autowired
-    private EmailVerificationService emailVerificationService;
-
     // Comma-separated allowlist of faculty email addresses permitted to
     // register as ROLE_TEACHER — set via the APPROVED_TEACHER_EMAILS
     // environment variable (or the gitignored backend/config/application.properties
@@ -72,23 +68,35 @@ public class AuthService {
     @Value("${app.approved-teacher-emails:}")
     private String approvedTeacherEmailsRaw;
 
-    // Parsed once at startup into a lowercased, trimmed set for O(1),
+    // Same allowlist mechanism, for ROLE_STUDENT registration — set via
+    // APPROVED_STUDENT_EMAILS. Kept as a separate list from the teacher one
+    // so each can be managed independently.
+    @Value("${app.approved-student-emails:}")
+    private String approvedStudentEmailsRaw;
+
+    // Parsed once at startup into lowercased, trimmed sets for O(1),
     // case-insensitive lookups — supports any number of addresses.
     private Set<String> approvedTeacherEmails = Collections.emptySet();
+    private Set<String> approvedStudentEmails = Collections.emptySet();
 
     @PostConstruct
-    private void parseApprovedTeacherEmails() {
-        if (approvedTeacherEmailsRaw == null || approvedTeacherEmailsRaw.isBlank()) {
-            approvedTeacherEmails = Collections.emptySet();
-            return;
+    private void parseApprovedEmailAllowlists() {
+        approvedTeacherEmails = parseAllowlist(approvedTeacherEmailsRaw);
+        approvedStudentEmails = parseAllowlist(approvedStudentEmailsRaw);
+    }
+
+    private Set<String> parseAllowlist(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptySet();
         }
-        approvedTeacherEmails = new HashSet<>();
-        for (String email : approvedTeacherEmailsRaw.split(",")) {
+        Set<String> parsed = new HashSet<>();
+        for (String email : raw.split(",")) {
             String normalized = email.trim().toLowerCase();
             if (!normalized.isEmpty()) {
-                approvedTeacherEmails.add(normalized);
+                parsed.add(normalized);
             }
         }
+        return parsed;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -144,12 +152,9 @@ public class AuthService {
      * STEP BY STEP:
      * 1. Enforce the per-IP registration rate limit
      * 2. Check if email already exists (to prevent duplicates)
-     * 3. Create a new User entity with hashed password, unverified
+     * 3. Create a new User entity with hashed password
      * 4. Save the User to the database
      * 5. Create an empty profile (StudentProfile or TeacherProfile)
-     * 6. Issue a verification token and email the link — no JWT is issued
-     *    here anymore; the account can't log in until that link is clicked
-     *    (see login() below)
      *
      * @param request  - RegisterRequest DTO containing name, email, password, role
      * @param clientIp - the caller's real IP (see ClientIpResolver), used only
@@ -157,13 +162,13 @@ public class AuthService {
      *                   which case this call is not rate limited (fail open
      *                   rather than lock every unresolvable-IP caller
      *                   together under one shared bucket)
-     * @return a message telling the user to check their email
+     * @return a message confirming the account was created
      */
     public Map<String, String> register(RegisterRequest request, String clientIp) {
         enforceRegistrationRateLimit(clientIp);
 
-        // Check for duplicate email
-        if (userRepository.existsByEmail(request.getEmail())) {
+        // Check for duplicate email (case-insensitive — see UserRepository)
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
             throw new RuntimeException("An account with this email already exists");
         }
 
@@ -188,6 +193,21 @@ public class AuthService {
             }
         }
 
+        // Same allowlist gate for students — an empty/unset list fails
+        // closed (rejects everyone) rather than failing open, matching the
+        // teacher allowlist's behavior.
+        if (request.getRole().equals("ROLE_STUDENT")) {
+            if (approvedStudentEmails.isEmpty()) {
+                throw new RuntimeException(
+                        "Student registration is not configured. Contact your administrator.");
+            }
+            String normalizedEmail = request.getEmail().trim().toLowerCase();
+            if (!approvedStudentEmails.contains(normalizedEmail)) {
+                throw new RuntimeException(
+                        "This email is not on the approved student list. Contact your administrator.");
+            }
+        }
+
         // Create and save the User entity
         User user = new User();
         user.setName(request.getName());
@@ -209,11 +229,7 @@ public class AuthService {
             teacherProfileRepository.save(profile);
         }
 
-        // Send the verification email — login is blocked until this link is clicked
-        emailVerificationService.issueAndSend(user);
-
-        return Map.of("message",
-                "Registration successful! Please check your email to verify your account before signing in.");
+        return Map.of("message", "Registration successful! You can now sign in.");
     }
 
     /**
@@ -223,8 +239,7 @@ public class AuthService {
      * 1. Use Spring Security's AuthenticationManager to verify email+password
      * 2. If credentials are wrong, it throws an exception automatically
      * 3. Load the user from the database
-     * 4. Reject if the account's email hasn't been verified yet
-     * 5. Generate a JWT token and return it
+     * 4. Generate a JWT token and return it
      *
      * @param request - LoginRequest DTO with email and password
      * @return AuthResponse with JWT token and user information
@@ -249,17 +264,10 @@ public class AuthService {
         // Authentication succeeded — clear any prior failed attempts for this email
         loginAttempts.remove(email);
 
-        // Load the full user entity to get the role and name
-        User user = userRepository.findByEmail(request.getEmail())
+        // Load the full user entity to get the role and name (case-insensitive
+        // — must match however CustomUserDetailsService just found this user)
+        User user = userRepository.findByEmailIgnoreCase(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // Correct password, but the account hasn't clicked its verification
-        // link yet — this check does NOT count as a failed login attempt,
-        // since the password itself was right.
-        if (!user.isEmailVerified()) {
-            throw new EmailNotVerifiedException(
-                    "Please verify your email before logging in. Check your inbox for the verification link.");
-        }
 
         // Generate a new JWT token for this session
         String token = jwtUtil.generateToken(user.getEmail());

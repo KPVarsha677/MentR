@@ -4,7 +4,6 @@ import com.mentorhub.dto.AuthResponse;
 import com.mentorhub.dto.LoginRequest;
 import com.mentorhub.dto.RegisterRequest;
 import com.mentorhub.entity.User;
-import com.mentorhub.exception.EmailNotVerifiedException;
 import com.mentorhub.repository.StudentProfileRepository;
 import com.mentorhub.repository.TeacherProfileRepository;
 import com.mentorhub.repository.UserRepository;
@@ -21,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -39,7 +39,6 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtUtil jwtUtil;
     @Mock private AuthenticationManager authenticationManager;
-    @Mock private EmailVerificationService emailVerificationService;
 
     private AuthService authService;
 
@@ -52,8 +51,24 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "passwordEncoder", passwordEncoder);
         ReflectionTestUtils.setField(authService, "jwtUtil", jwtUtil);
         ReflectionTestUtils.setField(authService, "authenticationManager", authenticationManager);
-        ReflectionTestUtils.setField(authService, "emailVerificationService", emailVerificationService);
         ReflectionTestUtils.setField(authService, "approvedTeacherEmails", Set.of("teacher@college.ac.in"));
+
+        // The student allowlist now gates ROLE_STUDENT registration the same
+        // way the teacher allowlist gates ROLE_TEACHER — every @test.com
+        // email used by the existing (pre-allowlist) student-registration
+        // and rate-limit tests below must be pre-approved here so those
+        // tests keep exercising the behavior they were written for, rather
+        // than tripping the new allowlist gate instead.
+        Set<String> studentTestEmails = new HashSet<>();
+        studentTestEmails.add("alice@test.com");
+        studentTestEmails.add("locked@test.com");
+        studentTestEmails.add("other@test.com");
+        studentTestEmails.add("afterexpiry@test.com");
+        for (int i = 0; i <= 10; i++) studentTestEmails.add("student" + i + "@test.com");
+        for (int i = 0; i < 10; i++) studentTestEmails.add("busy" + i + "@test.com");
+        for (int i = 0; i < 10; i++) studentTestEmails.add("win" + i + "@test.com");
+        for (int i = 0; i < 15; i++) studentTestEmails.add("noip" + i + "@test.com");
+        ReflectionTestUtils.setField(authService, "approvedStudentEmails", studentTestEmails);
     }
 
     private RegisterRequest studentRequest() {
@@ -70,29 +85,27 @@ class AuthServiceTest {
     private static final String TEST_IP = "127.0.0.1";
 
     @Test
-    void register_newStudent_createsUnverifiedUserAndSendsVerificationEmail_noTokenReturned() {
+    void register_newStudent_createsUser_noTokenReturned() {
         RegisterRequest req = studentRequest();
-        when(userRepository.existsByEmail("alice@test.com")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("alice@test.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
 
         Map<String, String> response = authService.register(req, TEST_IP);
 
         verify(userRepository).save(argThat(u -> u.getEmail().equals("alice@test.com")
-                && u.getPassword().equals("hashed")
-                && !u.isEmailVerified()));
+                && u.getPassword().equals("hashed")));
         verify(studentProfileRepository).save(any());
-        verify(emailVerificationService).issueAndSend(any(User.class));
         verify(jwtUtil, never()).generateToken(anyString());
-        assertTrue(response.get("message").toLowerCase().contains("check your email"));
+        assertTrue(response.get("message").toLowerCase().contains("sign in"));
     }
 
     @Test
     void register_duplicateEmail_isRejected() {
         RegisterRequest req = studentRequest();
-        when(userRepository.existsByEmail("alice@test.com")).thenReturn(true);
+        when(userRepository.existsByEmailIgnoreCase("alice@test.com")).thenReturn(true);
 
         assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
-        verify(emailVerificationService, never()).issueAndSend(any());
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -100,7 +113,7 @@ class AuthServiceTest {
         RegisterRequest req = studentRequest();
         req.setEmail("stranger@test.com");
         req.setRole("ROLE_TEACHER");
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
         assertTrue(ex.getMessage().toLowerCase().contains("approved faculty list"));
@@ -112,14 +125,13 @@ class AuthServiceTest {
         RegisterRequest req = studentRequest();
         req.setEmail("teacher@college.ac.in");
         req.setRole("ROLE_TEACHER");
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         authService.register(req, TEST_IP);
 
         verify(userRepository).save(any(User.class));
         verify(teacherProfileRepository).save(any());
-        verify(emailVerificationService).issueAndSend(any(User.class));
     }
 
     @Test
@@ -129,13 +141,12 @@ class AuthServiceTest {
         // should still match despite different case and stray whitespace.
         req.setEmail("  TEACHER@College.AC.in  ");
         req.setRole("ROLE_TEACHER");
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         authService.register(req, TEST_IP);
 
         verify(userRepository).save(any(User.class));
-        verify(emailVerificationService).issueAndSend(any(User.class));
     }
 
     @Test
@@ -144,22 +155,90 @@ class AuthServiceTest {
         RegisterRequest req = studentRequest();
         req.setEmail("teacher@college.ac.in");
         req.setRole("ROLE_TEACHER");
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
         assertTrue(ex.getMessage().toLowerCase().contains("not configured"));
         verify(userRepository, never()).save(any());
     }
 
+    // ── register: student allowlist ─────────────────────────────────────
+
     @Test
-    void parseApprovedTeacherEmails_lowercasesTrimsAndIgnoresBlankEntries() {
+    void register_studentEmailNotOnApprovedList_isRejected() {
+        RegisterRequest req = studentRequest();
+        req.setEmail("stranger@test.com");
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
+        assertTrue(ex.getMessage().toLowerCase().contains("approved student list"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_studentEmailOnApprovedList_succeeds() {
+        RegisterRequest req = studentRequest();
+        req.setEmail("alice@test.com");
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        authService.register(req, TEST_IP);
+
+        verify(userRepository).save(any(User.class));
+        verify(studentProfileRepository).save(any());
+    }
+
+    @Test
+    void register_studentEmailMatching_isCaseInsensitiveAndTrimsWhitespace() {
+        ReflectionTestUtils.setField(authService, "approvedStudentEmails", Set.of("student@college.ac.in"));
+        RegisterRequest req = studentRequest();
+        req.setEmail("  STUDENT@College.AC.in  ");
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        authService.register(req, TEST_IP);
+
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void register_studentRegistrationNotConfigured_isRejectedWhenApprovedListIsEmpty() {
+        ReflectionTestUtils.setField(authService, "approvedStudentEmails", Set.<String>of());
+        RegisterRequest req = studentRequest();
+        req.setEmail("alice@test.com");
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.register(req, TEST_IP));
+        assertTrue(ex.getMessage().toLowerCase().contains("not configured"));
+        verify(userRepository, never()).save(any());
+    }
+
+    // ── allowlist parsing ────────────────────────────────────────────────
+
+    @Test
+    void parseApprovedEmailAllowlists_lowercasesTrimsAndIgnoresBlankEntries() {
         ReflectionTestUtils.setField(authService, "approvedTeacherEmailsRaw",
                 "  Teacher1@College.AC.IN , teacher2@college.ac.in ,, ");
+        ReflectionTestUtils.setField(authService, "approvedStudentEmailsRaw",
+                "  Student1@College.AC.IN , student2@college.ac.in ,, ");
 
-        ReflectionTestUtils.invokeMethod(authService, "parseApprovedTeacherEmails");
+        ReflectionTestUtils.invokeMethod(authService, "parseApprovedEmailAllowlists");
 
-        Object parsed = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
-        assertEquals(Set.of("teacher1@college.ac.in", "teacher2@college.ac.in"), parsed);
+        Object parsedTeachers = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
+        assertEquals(Set.of("teacher1@college.ac.in", "teacher2@college.ac.in"), parsedTeachers);
+
+        Object parsedStudents = ReflectionTestUtils.getField(authService, "approvedStudentEmails");
+        assertEquals(Set.of("student1@college.ac.in", "student2@college.ac.in"), parsedStudents);
+    }
+
+    @Test
+    void parseApprovedEmailAllowlists_emptyRawYieldsEmptySet() {
+        ReflectionTestUtils.setField(authService, "approvedStudentEmailsRaw", "");
+
+        ReflectionTestUtils.invokeMethod(authService, "parseApprovedEmailAllowlists");
+
+        Object parsedStudents = ReflectionTestUtils.getField(authService, "approvedStudentEmails");
+        assertEquals(Set.of(), parsedStudents);
     }
 
     @Test
@@ -167,7 +246,7 @@ class AuthServiceTest {
         String manyEmails = "t1@college.ac.in,t2@college.ac.in,t3@college.ac.in,t4@college.ac.in,t5@college.ac.in";
         ReflectionTestUtils.setField(authService, "approvedTeacherEmailsRaw", manyEmails);
 
-        ReflectionTestUtils.invokeMethod(authService, "parseApprovedTeacherEmails");
+        ReflectionTestUtils.invokeMethod(authService, "parseApprovedEmailAllowlists");
 
         Object parsed = ReflectionTestUtils.getField(authService, "approvedTeacherEmails");
         assertEquals(5, ((Set<?>) parsed).size());
@@ -177,7 +256,7 @@ class AuthServiceTest {
 
     @Test
     void register_tenAttemptsFromSameIpSucceed_eleventhIsRateLimited() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         for (int i = 0; i < 10; i++) {
@@ -198,7 +277,7 @@ class AuthServiceTest {
 
     @Test
     void register_rateLimitIsPerIp_differentIpIsUnaffected() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         for (int i = 0; i < 10; i++) {
@@ -219,7 +298,7 @@ class AuthServiceTest {
 
     @Test
     void register_rateLimitWindowExpires_resetsCount() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         for (int i = 0; i < 10; i++) {
@@ -246,7 +325,7 @@ class AuthServiceTest {
     void register_unresolvableClientIp_isNotRateLimited() {
         // A null clientIp (e.g. IP genuinely couldn't be resolved) fails
         // open rather than sharing one bucket across every such caller.
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
         for (int i = 0; i < 15; i++) {
@@ -265,30 +344,14 @@ class AuthServiceTest {
         user.setName("Alice");
         user.setEmail("alice@test.com");
         user.setRole("ROLE_STUDENT");
-        user.setEmailVerified(true);
         return user;
     }
 
     @Test
-    void login_correctCredentialsButUnverifiedEmail_isBlocked() {
-        User user = verifiedUser();
-        user.setEmailVerified(false);
-        when(authenticationManager.authenticate(any())).thenReturn(mock(Authentication.class));
-        when(userRepository.findByEmail("alice@test.com")).thenReturn(Optional.of(user));
-
-        LoginRequest req = new LoginRequest();
-        req.setEmail("alice@test.com");
-        req.setPassword("password123");
-
-        assertThrows(EmailNotVerifiedException.class, () -> authService.login(req));
-        verify(jwtUtil, never()).generateToken(anyString());
-    }
-
-    @Test
-    void login_correctCredentialsAndVerifiedEmail_succeeds() {
+    void login_correctCredentials_succeeds() {
         User user = verifiedUser();
         when(authenticationManager.authenticate(any())).thenReturn(mock(Authentication.class));
-        when(userRepository.findByEmail("alice@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("alice@test.com")).thenReturn(Optional.of(user));
         when(jwtUtil.generateToken("alice@test.com")).thenReturn("signed-jwt");
 
         LoginRequest req = new LoginRequest();
@@ -313,7 +376,7 @@ class AuthServiceTest {
         req.setPassword("wrong");
 
         assertThrows(BadCredentialsException.class, () -> authService.login(req));
-        verify(userRepository, never()).findByEmail(anyString());
+        verify(userRepository, never()).findByEmailIgnoreCase(anyString());
     }
 
     @Test

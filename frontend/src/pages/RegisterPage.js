@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 /**
  * RegisterPage - Registration for new teachers and students.
- * The account is created unverified — registering no longer logs the user
- * in. Instead they're shown a "check your email" screen and must click the
- * verification link before they can sign in.
+ * On success, the account can sign in immediately.
  */
 function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -18,8 +16,8 @@ function RegisterPage() {
   const [error, setError]               = useState('');
   const [loading, setLoading]           = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [registered, setRegistered]     = useState(false);
-  const [resendStatus, setResendStatus] = useState('');
+
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,21 +30,11 @@ function RegisterPage() {
 
     try {
       await api.post('/api/auth/register', formData);
-      setRegistered(true);
+      navigate('/login');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    setResendStatus('sending');
-    try {
-      const response = await api.post('/api/auth/resend-verification', { email: formData.email });
-      setResendStatus(response.data.message);
-    } catch (err) {
-      setResendStatus(err.response?.data?.error || 'Could not resend. Please try again.');
     }
   };
 
@@ -100,37 +88,6 @@ function RegisterPage() {
             <span className="text-blue-600 font-black text-xl">MentR</span>
           </div>
 
-          {registered ? (
-            <>
-              <h1 className="text-2xl font-black text-slate-800 mb-1">Check your email 📬</h1>
-              <p className="text-slate-500 text-sm mb-6">
-                We sent a verification link to <span className="font-semibold">{formData.email}</span>.
-                Click it to activate your account, then sign in.
-              </p>
-
-              {resendStatus && (
-                <div className="alert-error mb-4" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
-                  <span>{resendStatus}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resendStatus === 'sending'}
-                className="btn-primary w-full py-3 text-base mb-4"
-              >
-                Resend verification email
-              </button>
-
-              <p className="text-center text-sm text-slate-500">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
-                  Back to sign in
-                </Link>
-              </p>
-            </>
-          ) : (
-          <>
           <h1 className="text-2xl font-black text-slate-800 mb-1">Create your account</h1>
           <p className="text-slate-500 text-sm mb-8">Start managing your academic journey with MentR.</p>
 
@@ -232,8 +189,6 @@ function RegisterPage() {
               Sign in
             </Link>
           </p>
-          </>
-          )}
         </div>
       </div>
     </div>

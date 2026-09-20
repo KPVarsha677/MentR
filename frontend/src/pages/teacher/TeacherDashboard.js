@@ -31,11 +31,11 @@ function TeacherDashboard() {
   const statCards = [
     { label: 'Total Students',      value: stats.totalStudents,         icon: '👥', bg: 'bg-blue-50',   icon_bg: 'bg-blue-100',   text: 'text-blue-700',   path: '/teacher/search' },
     { label: 'Total Classrooms',    value: stats.totalClassrooms,       icon: '📚', bg: 'bg-indigo-50', icon_bg: 'bg-indigo-100', text: 'text-indigo-700', path: '/teacher/classrooms' },
-    { label: 'Pending Reviews',     value: stats.totalPending,          icon: '⏳', bg: 'bg-amber-50',  icon_bg: 'bg-amber-100',  text: 'text-amber-700',  path: '/teacher/reports', state: { preset: 'pending' } },
-    { label: 'Pending Projects',    value: stats.pendingProjects,       icon: '💻', bg: 'bg-purple-50', icon_bg: 'bg-purple-100', text: 'text-purple-700', path: '/teacher/reports', state: { preset: 'pending' } },
-    { label: 'Pending Certs',       value: stats.pendingCertifications, icon: '🏆', bg: 'bg-emerald-50',icon_bg: 'bg-emerald-100',text: 'text-emerald-700', path: '/teacher/reports', state: { preset: 'pending' } },
-    { label: 'Pending Internships', value: stats.pendingInternships,    icon: '🏢', bg: 'bg-rose-50',   icon_bg: 'bg-rose-100',   text: 'text-rose-700',   path: '/teacher/reports', state: { preset: 'pending' } },
-    { label: 'Pending Achievements',value: stats.pendingAchievements,   icon: '🌟', bg: 'bg-orange-50', icon_bg: 'bg-orange-100', text: 'text-orange-700', path: '/teacher/reports', state: { preset: 'pending' } },
+    { label: 'Pending Reviews',     value: stats.totalPending,          icon: '⏳', bg: 'bg-amber-50',  icon_bg: 'bg-amber-100',  text: 'text-amber-700',  path: '/teacher/pending' },
+    { label: 'Pending Projects',    value: stats.pendingProjects,       icon: '💻', bg: 'bg-purple-50', icon_bg: 'bg-purple-100', text: 'text-purple-700', path: '/teacher/pending#projects' },
+    { label: 'Pending Certs',       value: stats.pendingCertifications, icon: '🏆', bg: 'bg-emerald-50',icon_bg: 'bg-emerald-100',text: 'text-emerald-700', path: '/teacher/pending#certifications' },
+    { label: 'Pending Internships', value: stats.pendingInternships,    icon: '🏢', bg: 'bg-rose-50',   icon_bg: 'bg-rose-100',   text: 'text-rose-700',   path: '/teacher/pending#internships' },
+    { label: 'Pending Achievements',value: stats.pendingAchievements,   icon: '🌟', bg: 'bg-orange-50', icon_bg: 'bg-orange-100', text: 'text-orange-700', path: '/teacher/pending#achievements' },
   ];
 
   const actionLinks = [

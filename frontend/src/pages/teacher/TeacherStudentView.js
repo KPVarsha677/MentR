@@ -193,17 +193,9 @@ function TeacherStudentView() {
           {skills.length === 0 ? <p className="text-gray-400 col-span-3 text-center py-8">No skills added.</p> :
             skills.map(s => (
               <div key={s.id} className="card relative">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold text-gray-800">{s.name}</h4>
-                      <StatusBadge status={s.verificationStatus} />
-                    </div>
-                    {s.category         && <p className="text-xs text-gray-500">{s.category}</p>}
-                    {s.proficiencyLevel && <p className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block">{s.proficiencyLevel}</p>}
-                  </div>
-                  <VerifyButton endpoint="/api/teacher/verify/skill" itemId={s.id} onVerified={loadAll} />
-                </div>
+                <h4 className="font-semibold text-gray-800 mb-1">{s.name}</h4>
+                {s.category         && <p className="text-xs text-gray-500">{s.category}</p>}
+                {s.proficiencyLevel && <p className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block">{s.proficiencyLevel}</p>}
               </div>
             ))
           }

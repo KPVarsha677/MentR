@@ -40,6 +40,11 @@ public class Notification {
     @Column(name = "is_read", nullable = false)
     private boolean read = false;
 
+    // Set when a student marks a direct teacher notification as done. Completed
+    // notifications are hidden from the student's inbox once acted on.
+    @Column(nullable = false)
+    private boolean completed = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

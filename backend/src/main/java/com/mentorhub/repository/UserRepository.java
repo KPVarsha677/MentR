@@ -15,22 +15,28 @@ import java.util.Optional;
  * - save(user), findById(id), findAll(), deleteById(id), etc.
  *
  * HOW METHOD NAMES WORK:
- * "findByEmail" → Spring generates: SELECT * FROM users WHERE email = ?
- * "existsByEmail" → Spring generates: SELECT COUNT(*) FROM users WHERE email = ?
+ * "findByEmailIgnoreCase" → Spring generates: SELECT * FROM users WHERE UPPER(email) = UPPER(?)
+ * "existsByEmailIgnoreCase" → Spring generates: SELECT COUNT(*) FROM users WHERE UPPER(email) = UPPER(?)
+ *
+ * WHY IgnoreCase: MySQL's default collation made email lookups case-insensitive
+ * for free ("Foo@x.com" matched "foo@x.com"). PostgreSQL's default comparison is
+ * case-sensitive, which silently let case-variant duplicate accounts be created
+ * and broke login for anyone who typed their email in different casing than they
+ * registered with. IgnoreCase restores the original, expected behavior on both.
  */
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
-     * Find a user by their email address.
+     * Find a user by their email address, case-insensitively.
      * Used during login to look up the user.
      * Returns Optional<User> to safely handle the case where no user is found.
      */
-    Optional<User> findByEmail(String email);
+    Optional<User> findByEmailIgnoreCase(String email);
 
     /**
-     * Check if a user with this email already exists.
+     * Check if a user with this email already exists, case-insensitively.
      * Used during registration to prevent duplicate accounts.
      */
-    boolean existsByEmail(String email);
+    boolean existsByEmailIgnoreCase(String email);
 }

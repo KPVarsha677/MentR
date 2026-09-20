@@ -7,7 +7,6 @@ import LandingPage from './pages/LandingPage';
 // Auth Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import VerifyEmailPage from './pages/VerifyEmailPage';
 
 // Student Pages
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -19,6 +18,7 @@ import StudentInternships from './pages/student/StudentInternships';
 import StudentAchievements from './pages/student/StudentAchievements';
 import StudentClassrooms from './pages/student/StudentClassrooms';
 import StudentMarks from './pages/student/StudentMarks';
+import StudentNotifications from './pages/student/StudentNotifications';
 
 // Teacher Pages
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -55,7 +55,6 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
 
         {/* Student Routes - protected, only ROLE_STUDENT */}
         <Route path="/student" element={<ProtectedRoute role="ROLE_STUDENT" />}>
@@ -68,6 +67,7 @@ function App() {
           <Route path="achievements" element={<StudentAchievements />} />
           <Route path="classrooms" element={<StudentClassrooms />} />
           <Route path="marks" element={<StudentMarks />} />
+          <Route path="notifications" element={<StudentNotifications />} />
         </Route>
 
         {/* Teacher Routes - protected, only ROLE_TEACHER */}

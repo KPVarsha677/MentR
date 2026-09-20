@@ -2,13 +2,9 @@ import React, { useState, useEffect } from 'react';
 import StudentLayout from '../../layouts/StudentLayout';
 import api from '../../services/api';
 
-function StatusBadge({ status }) {
-  const classes = { PENDING: 'badge-pending', APPROVED: 'badge-approved', REJECTED: 'badge-rejected' };
-  return <span className={classes[status] || 'badge-pending'}>{status}</span>;
-}
-
 /**
- * StudentSkills - manage the student's skills section.
+ * StudentSkills - manage the student's skills section. Skills are freely
+ * added personal information, not subject to teacher verification.
  */
 function StudentSkills() {
   const [skills, setSkills]     = useState([]);
@@ -121,13 +117,9 @@ function StudentSkills() {
             <div key={skill.id} className="card">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold text-gray-800">{skill.name}</h4>
-                    <StatusBadge status={skill.verificationStatus} />
-                  </div>
+                  <h4 className="font-semibold text-gray-800 mb-1">{skill.name}</h4>
                   {skill.category && <p className="text-xs text-gray-500">{skill.category}</p>}
                   {skill.proficiencyLevel && <p className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block">{skill.proficiencyLevel}</p>}
-                  {skill.teacherComment && <p className="text-xs text-gray-500 mt-2 italic">"{skill.teacherComment}"</p>}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleEdit(skill)} className="text-xs text-blue-600 hover:underline">Edit</button>

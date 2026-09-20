@@ -3,6 +3,7 @@ package com.mentorhub.controller;
 import com.mentorhub.dto.*;
 import com.mentorhub.entity.*;
 import com.mentorhub.security.SecurityUtils;
+import com.mentorhub.service.NotificationService;
 import com.mentorhub.service.StudentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ public class StudentController {
     @Autowired
     private StudentService studentService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     // ========== PROFILE ==========
 
     @GetMapping("/{userId}/profile")
@@ -52,7 +56,7 @@ public class StudentController {
 
     @PutMapping("/{userId}/profile")
     public ResponseEntity<StudentProfile> updateProfile(@PathVariable Long userId,
-                                                         @RequestBody StudentProfileRequest request) {
+                                                         @Valid @RequestBody StudentProfileRequest request) {
         SecurityUtils.requireSelf(userId);
         return ResponseEntity.ok(studentService.updateProfile(userId, request));
     }
@@ -210,5 +214,47 @@ public class StudentController {
         SecurityUtils.requireSelf(userId);
         studentService.deleteAchievement(userId, achievementId);
         return ResponseEntity.ok(Map.of("message", "Achievement deleted"));
+    }
+
+    // ========== NOTIFICATIONS ==========
+
+    @GetMapping("/{userId}/notifications")
+    public ResponseEntity<List<Notification>> getNotifications(@PathVariable Long userId) {
+        SecurityUtils.requireSelf(userId);
+        return ResponseEntity.ok(notificationService.getStudentNotifications(userId));
+    }
+
+    @GetMapping("/{userId}/notifications/count")
+    public ResponseEntity<Map<String, Long>> getUnreadCount(@PathVariable Long userId) {
+        SecurityUtils.requireSelf(userId);
+        return ResponseEntity.ok(Map.of("unread", notificationService.getStudentUnreadCount(userId)));
+    }
+
+    @PutMapping("/{userId}/notifications/{notificationId}/read")
+    public ResponseEntity<Map<String, String>> markOneRead(@PathVariable Long userId,
+                                                            @PathVariable Long notificationId) {
+        SecurityUtils.requireSelf(userId);
+        notificationService.markAsReadForStudent(notificationId, userId);
+        return ResponseEntity.ok(Map.of("message", "Marked as read"));
+    }
+
+    @PutMapping("/{userId}/notifications/read")
+    public ResponseEntity<Map<String, String>> markAllRead(@PathVariable Long userId) {
+        SecurityUtils.requireSelf(userId);
+        notificationService.markAllAsReadForStudent(userId);
+        return ResponseEntity.ok(Map.of("message", "All notifications marked as read"));
+    }
+
+    /**
+     * PUT /api/student/{userId}/notifications/{notificationId}/complete
+     * Student marks a direct notification as done: it disappears from their
+     * inbox and the teacher receives a confirmation notification.
+     */
+    @PutMapping("/{userId}/notifications/{notificationId}/complete")
+    public ResponseEntity<Map<String, String>> completeNotification(@PathVariable Long userId,
+                                                                     @PathVariable Long notificationId) {
+        SecurityUtils.requireSelf(userId);
+        notificationService.completeNotification(notificationId, userId);
+        return ResponseEntity.ok(Map.of("message", "Marked as done"));
     }
 }

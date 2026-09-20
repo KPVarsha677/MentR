@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import TeacherLayout from '../../layouts/TeacherLayout';
 import api from '../../services/api';
 
@@ -24,7 +23,6 @@ function TeacherReports() {
   const teacherId   = localStorage.getItem('userId');
   const teacherName = localStorage.getItem('name') || 'Teacher';
   const today       = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
-  const location    = useLocation();
 
   useEffect(() => {
     api.get(`/api/classrooms/teacher/${teacherId}`)
@@ -35,19 +33,6 @@ function TeacherReports() {
       .then(res => setAllStudents(res.data))
       .catch(() => {});
   }, [teacherId]);
-
-  // Arriving from a Dashboard "Pending ..." card: preselect and auto-generate
-  // the Pending Verifications report so the click lands on real data.
-  useEffect(() => {
-    if (location.state?.preset === 'pending') {
-      setSelectedReport('pending');
-      setLoading(true);
-      api.get('/api/reports/pending-verifications')
-        .then(res => setReportData({ type: 'pending', data: res.data }))
-        .catch(err => setSearchError('Failed to generate report: ' + (err.response?.data?.error || err.message)))
-        .finally(() => setLoading(false));
-    }
-  }, [location.state]);
 
   // Resolve register number to student ID when user changes the input
   const resolveStudent = () => {

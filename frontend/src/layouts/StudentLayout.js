@@ -25,6 +25,7 @@ function StudentLayout({ children, title }) {
     { path: '/student/achievements',   label: 'Achievements',   icon: '🌟' },
     { path: '/student/classrooms',     label: 'Classrooms',     icon: '📚' },
     { path: '/student/marks',          label: 'Marks',          icon: '📊' },
+    { path: '/student/notifications',  label: 'Notifications',  icon: '🔔' },
   ];
 
   return (

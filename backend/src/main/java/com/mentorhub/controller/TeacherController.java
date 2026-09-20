@@ -222,4 +222,47 @@ public class TeacherController {
         }
         return ResponseEntity.ok(notification);
     }
+
+    /**
+     * POST /api/teacher/{teacherId}/notifications/send-classroom
+     * Teacher sends a direct notification to every student in one of their classrooms.
+     */
+    @PostMapping("/{teacherId}/notifications/send-classroom")
+    public ResponseEntity<Map<String, Object>> sendClassroomNotification(@PathVariable Long teacherId,
+                                                                          @RequestBody Map<String, Object> body) {
+        SecurityUtils.requireSelf(teacherId);
+        Long classroomId = Long.valueOf(body.get("classroomId").toString());
+        String message  = body.getOrDefault("message",  "").toString();
+        String itemType = body.getOrDefault("itemType", "GENERAL").toString();
+        String action   = body.getOrDefault("action",   "INFO").toString();
+
+        int count = notificationService.createClassroomNotification(
+                teacherId, classroomId, itemType, action, message);
+
+        return ResponseEntity.ok(Map.of("message", "Notification sent", "studentsNotified", count));
+    }
+
+    /**
+     * DELETE /api/teacher/{teacherId}/notifications/{notificationId}
+     * Teacher dismisses a notification (e.g. a "student completed this task"
+     * confirmation) from their own inbox.
+     */
+    @DeleteMapping("/{teacherId}/notifications/{notificationId}")
+    public ResponseEntity<Map<String, String>> deleteNotification(@PathVariable Long teacherId,
+                                                                   @PathVariable Long notificationId) {
+        SecurityUtils.requireSelf(teacherId);
+        notificationService.deleteTeacherNotification(notificationId, teacherId);
+        return ResponseEntity.ok(Map.of("message", "Notification removed"));
+    }
+
+    /**
+     * DELETE /api/teacher/{teacherId}/notifications
+     * Clear every notification in the teacher's inbox at once.
+     */
+    @DeleteMapping("/{teacherId}/notifications")
+    public ResponseEntity<Map<String, String>> deleteAllNotifications(@PathVariable Long teacherId) {
+        SecurityUtils.requireSelf(teacherId);
+        notificationService.deleteAllTeacherNotifications(teacherId);
+        return ResponseEntity.ok(Map.of("message", "All notifications cleared"));
+    }
 }
