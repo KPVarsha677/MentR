@@ -166,11 +166,6 @@ function TeacherReports() {
             <button onClick={generateReport} disabled={loading || !selectedReport} className="btn-primary">
               {loading ? 'Generating...' : 'Generate Report'}
             </button>
-            {reportData && (
-              <button onClick={() => window.print()} className="btn-secondary">
-                🖨️ Print / Save PDF
-              </button>
-            )}
           </div>
         </div>
       </div>
