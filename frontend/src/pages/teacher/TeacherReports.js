@@ -11,7 +11,6 @@ import api from '../../services/api';
  */
 function TeacherReports() {
   const [classrooms, setClassrooms]     = useState([]);
-  const [allStudents, setAllStudents]   = useState([]);
   const [selectedReport, setSelectedReport] = useState('');
   const [reportData, setReportData]     = useState(null);
   const [loading, setLoading]           = useState(false);
@@ -28,26 +27,42 @@ function TeacherReports() {
     api.get(`/api/classrooms/teacher/${teacherId}`)
       .then(res => setClassrooms(res.data))
       .catch(() => {});
-    // load all students so we can resolve register number → student id
-    api.get(`/api/teacher/${teacherId}/students/search`)
-      .then(res => setAllStudents(res.data))
-      .catch(() => {});
   }, [teacherId]);
 
-  // Resolve register number to student ID when user changes the input
-  const resolveStudent = () => {
+  // Look up a student's user id by their exact register number.
+  // Queries the backend directly (rather than relying on a student list
+  // fetched once on page load, which could be stale or fail to load
+  // silently) and matches exactly, trimming whitespace on both sides so a
+  // stray leading/trailing space on either the input or the stored value
+  // doesn't cause a false "not found".
+  const findStudentByRegisterNumber = async (regNo) => {
+    const trimmed = regNo.trim();
+    if (!trimmed) return null;
+    const res = await api.get(`/api/teacher/${teacherId}/students/search`, {
+      params: { registerNumber: trimmed },
+    });
+    const match = (res.data || []).find(s =>
+      s.registerNumber && s.registerNumber.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    return match?.user?.id ?? null;
+  };
+
+  // Resolve register number to student ID when the input loses focus
+  const resolveStudent = async () => {
     setSearchError('');
     setResolvedStudentId(null);
     const trimmed = searchReg.trim();
     if (!trimmed) return;
 
-    const match = allStudents.find(s =>
-      s.registerNumber && s.registerNumber.toLowerCase() === trimmed.toLowerCase()
-    );
-    if (match) {
-      setResolvedStudentId(match.user?.id);
-    } else {
-      setSearchError(`No student found with register number "${trimmed}".`);
+    try {
+      const id = await findStudentByRegisterNumber(trimmed);
+      if (id) {
+        setResolvedStudentId(id);
+      } else {
+        setSearchError(`No student found with register number "${trimmed}".`);
+      }
+    } catch (err) {
+      setSearchError('Failed to look up student: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -57,23 +72,27 @@ function TeacherReports() {
     setSearchError('');
 
     // For student-level reports, resolve register number first
+    let sid = null;
     if (['portfolio', 'certifications', 'internships', 'achievements'].includes(selectedReport)) {
-      resolveStudent();
-      if (!resolvedStudentId) {
-        // Re-attempt inline
-        const match = allStudents.find(s =>
-          s.registerNumber && s.registerNumber.toLowerCase() === searchReg.trim().toLowerCase()
-        );
-        if (!match) {
-          setSearchError(`No student found with register number "${searchReg.trim()}".`);
-          setLoading(false);
-          return;
-        }
-        setResolvedStudentId(match.user?.id);
-        var sid = match.user?.id;
-      } else {
-        var sid = resolvedStudentId; // eslint-disable-line no-redeclare
+      const trimmed = searchReg.trim();
+      if (!trimmed) {
+        setSearchError('Enter a student register number.');
+        setLoading(false);
+        return;
       }
+      try {
+        sid = await findStudentByRegisterNumber(trimmed);
+      } catch (err) {
+        setSearchError('Failed to look up student: ' + (err.response?.data?.error || err.message));
+        setLoading(false);
+        return;
+      }
+      if (!sid) {
+        setSearchError(`No student found with register number "${trimmed}".`);
+        setLoading(false);
+        return;
+      }
+      setResolvedStudentId(sid);
     }
 
     try {
